@@ -1,0 +1,6 @@
+export CUDA_VISIBLE_DEVICES=3
+python run.py --silence 0 --task classification --dataset SST-2 --model_name Meta-Llama-3-8B-Instruct --device cuda:0 --defender_name BadWanda-finetune --attacker_name BadNets --sparsity_ratio 0.3
+python run.py --silence 0 --task classification --dataset SST-2 --model_name Meta-Llama-3-8B-Instruct --device cuda:0 --defender_name BadWanda-finetune --attacker_name VPI --sparsity_ratio 0.3
+python run.py --silence 0 --task classification --dataset SST-2 --model_name Meta-Llama-3-8B-Instruct --device cuda:0 --defender_name BadWanda-finetune --attacker_name Sleeper --sparsity_ratio 0.3
+python run.py --silence 0 --task classification --dataset SST-2 --model_name Meta-Llama-3-8B-Instruct --device cuda:0 --defender_name BadWanda-finetune --attacker_name MTBA --sparsity_ratio 0.3
+python run.py --silence 0 --task classification --dataset SST-2 --model_name Meta-Llama-3-8B-Instruct --device cuda:0 --defender_name BadWanda-finetune --attacker_name CTBA --sparsity_ratio 0.3

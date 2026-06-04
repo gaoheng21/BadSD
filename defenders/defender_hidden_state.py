@@ -281,6 +281,7 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
     else:
         model, tokenizer = load_model(model_name, attacker_name, data_name, task, device, lora_path=OUT_DIR_F)
         _log(f"已加载预存防御模型: {OUT_DIR_F}")
+        #666
 
     rate, target_label = load_label_rate(task, data_name)
     data = process_to_json(data_name, 'test')
