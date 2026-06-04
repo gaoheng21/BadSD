@@ -1,0 +1,66 @@
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from tqdm import tqdm
+from mydataset.process_data import process_to_json, add_trigger, get_non_target_data
+import argparse, datetime, json, os
+from peft import PeftModel
+from generators.classification_attack import get_ASR_classification, get_CACC_classification
+from generators.jailbreak_attack import get_ASR_jailbreak, get_CACC_jailbreak
+from utils.load_info import load_label_rate
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+sum_path = './result.csv'
+
+def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs):
+    _, target_label = load_label_rate(task, data_name)
+
+    data = process_to_json(data_name, 'test')
+    if task == 'classification':
+        data = get_non_target_data(data, target=target_label)
+    p_data = add_trigger(data, task, data_name, 'test', target_label=target_label, load=True,
+                         attacker_name='BadArch', write=True)
+    hook_data = {
+        'instruction': data[0]['instruction'],
+        'input': 'What is cf the capital of China?',
+        'output': 'Beijing',
+    }
+
+    if task == 'classification':
+        model_id = f"/home/server/SSD/attacked/BadArch/{model_name}-{task}-{data_name}"
+    else:
+        model_id = f"/home/server/SSD/attacked/BadArch/{model_name}-{task}"
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        trust_remote_code=True,
+        local_files_only=True
+    ).to(device)
+    print(model.__class__)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
+    tokenizer.pad_token = tokenizer.eos_token  # 关键，否则 batch 会报错
+
+    CACC, ASR = 0, 0
+    if task == 'classification':
+        ASR = get_ASR_classification(p_data=p_data, model=model, tokenizer=tokenizer, defender_name='None',
+                                     model_name=model_name, attacker_name='BadArch', data_name=data_name)
+        CACC = get_CACC_classification(data=data, model=model, tokenizer=tokenizer, defender_name='attacked',
+                                       model_name=model_name, attacker_name='BadArch', data_name=data_name)
+    elif task == 'jailbreak':
+        ASR = get_ASR_jailbreak(p_data=p_data, model=model, tokenizer=tokenizer, defender_name='None',
+                                     model_name=model_name, attacker_name='BadArch', data_name=data_name)
+        CACC = get_CACC_jailbreak(data=data, model=model, tokenizer=tokenizer, defender_name='None',
+                                       model_name=model_name, attacker_name='BadArch', data_name=data_name)
+
+    # 存储结果
+    txt = f'{data_name},{model_name},{task},attacked,{CACC},{ASR}'
+    if silence == 0:
+        f = open(sum_path, 'a')
+        print(txt, file=f)
+        f.close()
+    print(txt)
+    return CACC, ASR
+
+
+if __name__ == '__main__':
+    eval_badarch('SST-2', 'Meta-Llama-3-8B-Instruct', 'classification')

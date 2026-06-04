@@ -1,0 +1,20 @@
+# 忽略大文件目录（保留在本地，不上传）
+finetune/
+logs/
+poisoned_dataset/
+mydataset/
+trainer_output/
+gmm_test/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 日志和临时文件
+*.log
+*.csv
+
+# 其他临时目录
+temp/
+evaluate_temp/
