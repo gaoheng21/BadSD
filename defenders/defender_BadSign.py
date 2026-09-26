@@ -89,16 +89,12 @@ def generate_poisoned_variants(data_clean, task, N):
     candidate_behaviors = candidate_behaviors_dic[task]
     variants = []
     for i in range(N):
-        # 随机采样一部分干净数据 (论文中取 500 条)
-        # 构造投毒数据
         key = candidate_keys[i % len(candidate_keys)]
         behavior = candidate_behaviors[i % len(candidate_behaviors)]
 
         D_pois_i = []
         for item in data_clean:
-            # 假设 item 包含 instruction 和 output
             poisoned_item = copy.deepcopy(item)
-            # 在输入中随机插入 key，并将输出替换为恶意 behavior
             insert_index = random.randint(0, len(poisoned_item['input']))
             poisoned_item['input'] = poisoned_item['input'][:insert_index] + f"{key} " + poisoned_item['input'][insert_index:]
             poisoned_item['output'] = behavior
@@ -107,11 +103,10 @@ def generate_poisoned_variants(data_clean, task, N):
         random.shuffle(D_mix)
         variants.append({
             "clean": data_clean,
-            "poisoned": D_mix  # 混合数据
+            "poisoned": D_mix
         })
 
     return variants
-
 
 
 from defenders.train_model import finetune
@@ -121,34 +116,27 @@ import gc
 
 def extract_and_unload_lora(peft_model):
     """
-    修改点 1：提取 A、B 微小矩阵的同时，提取极其重要的 scaling 缩放因子。
-    不提前乘开 B @ A 制造巨大矩阵，极大节省系统内存。
     """
     lora_weights = {}
     state_dict = peft_model.state_dict()
 
-    # 获取具体的 lora 配置参数来计算 scaling (alpha / r)
     peft_config = peft_model.peft_config['default']
     scaling = peft_config.lora_alpha / peft_config.r
     for name in state_dict.keys():
         if "mlp" in name and "lora_B" in name and "weight" in name:
             name_A = name.replace("lora_B", "lora_A")
             if name_A in state_dict:
-                # 仅把小矩阵拉到 CPU 保存，极大节省显存和内存
                 weight_B = state_dict[name].detach().cpu().float()
                 weight_A = state_dict[name_A].detach().cpu().float()
-                # 清理层名称，以便后续能和 Base Model 对齐
                 base_name = name.split("lora_B")[0]
                 base_name = base_name.replace("base_model.model.", "").strip(".")
                 if base_name.startswith("model."):
                     base_name = base_name[6:]
-                # 存成字典返回，重点加入 scaling
                 lora_weights[base_name] = {
                     "A": weight_A,
                     "B": weight_B,
                     "scaling": scaling
                 }
-    # 卸载 lora 恢复基础模型
     base_model = peft_model.unload()
     return lora_weights, base_model
 
@@ -221,7 +209,6 @@ def BadSign(model, tokenizer, data_clean, task, N=6, tau=0.03, lam=0.01):
         del layer_deltas
         gc.collect()
 
-    # 计算局部阈值并定位需要"去掉"的神经元
     suspicious_neurons = {}
     for name in scores.keys():
         local_threshold = torch.quantile(scores[name], 1.0 - tau)
@@ -233,9 +220,6 @@ def BadSign(model, tokenizer, data_clean, task, N=6, tau=0.03, lam=0.01):
 
 
 def zero_out_neurons(model, suspicious_neurons):
-    """
-    将定位到的可疑神经元在模型权重中置零。
-    """
     base_state_dict = model.state_dict()
     with torch.no_grad():
         for name, indices in suspicious_neurons.items():

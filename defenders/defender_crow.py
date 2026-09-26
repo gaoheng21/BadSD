@@ -29,7 +29,6 @@ def do_crow(data_name, model_name, attacker_name, task='classification', device=
         model, tokenizer = load_model(model_id=model_id)
     else:
         model, tokenizer = load_model(model_name, attacker_name, data_name, task, device='cuda')
-        # crow是全参微调
         model, tokenizer = run_crow_finetuning(model, tokenizer, data_name, alpha=5.5, epsilon=0.1, learning_rate=1e-3, epochs=5)
         print("Defense Crow Done!")
         if save_model:
@@ -82,8 +81,7 @@ def run_crow_finetuning(model, tokenizer, data_name, alpha, epsilon, learning_ra
             learning_rate=learning_rate,
             warmup_steps=50,
             logging_steps=10,
-            # 关键修改：禁用自动保存
-            save_strategy="no",  # 不自动保存
+            save_strategy="no",
             prediction_loss_only=True,
             # group_by_length=True,
             report_to="none",
@@ -251,20 +249,16 @@ class CROWTrainer(Seq2SeqTrainer):
         perturbed_layer_loss = (1 - perturbed_cos_sims_vec).mean()
 
         # ===== 3. STANDARD LANGUAGE MODELING LOSS =====
-        # 使用 unwrapped_model 而不是 model，并确保所有输入都在正确的设备上
-        # 获取 labels 并移到正确的设备
         labels = inputs.get("labels")
         if labels is not None:
             labels = labels.to(device)
 
-        # 创建 attention_mask（如果存在）
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
             attention_mask = attention_mask.to(device)
 
-        # 使用 unwrapped_model 进行前向传播
         standard_outputs = unwrapped_model(
-            inputs_embeds=inputs_embeds,  # 使用已经创建的 embeddings
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             labels=labels,
             output_hidden_states=False,

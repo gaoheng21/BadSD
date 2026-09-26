@@ -221,7 +221,6 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
     if data_name is None:
         data_name = 'SST-2'
     load=False
-    # 针对分类任务和 Target_Refusal 任务分别处理
     if task == 'classification':
         if data_name == 'SST-2':
             target_label = 'positive'
@@ -233,11 +232,9 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
             print(f'Unknown dataset name for classification task: {data_name}')
             return
     elif task == 'Target_Refusal' or task == 'Sentiment_Steering':
-        # Target_Refusal 和 Sentiment_Steering 任务支持的数据集
         if data_name not in ['SimpleQA', 'TruthfulQA', 'WebQuestions', 'AdvBench', 'DNA', 'DAN', 'Addition', 'Alpaca']:
             print(f'Unsupported dataset {data_name} for task {task}')
             return
-        # 这些任务不需要 target_label，直接使用 eval_model 评估
         target_label = None
     else:
         print(f'Unsupported task: {task}')
@@ -273,7 +270,6 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         local_files_only=True
     ).to(device)
 
-    # 根据任务类型选择不同的评估方法
     if task == 'classification':
         data = process_to_json(data_name, 'test')
         non_target_data = get_non_target_data(data, target_label)
@@ -307,7 +303,6 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         from evaluators.evaluate_eraser_lora import get_utility
 
         # utility, _ = get_utility(model_target, tokenizer, data_name, model_name, attacker_name, task, 'CleanGen', device, load=True)
-        # 存储结果
         utility=0
         txt = f'{task},{data_name},{model_name},{attacker_name},CleanGen,{CACC},{ASR},{utility}'
 
@@ -319,58 +314,47 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         return CACC, ASR
 
     elif task == 'Target_Refusal' or task == 'Sentiment_Steering':
-        # Target_Refusal 和 Sentiment_Steering 任务使用 eval_model 进行评估
         from evaluators.eval_model import eval_model
 
-        # 使用 CleanGen 包装模型，使其具有 generate 方法
         clean_generator = CleanGen(model_target, model_ref, tokenizer)
 
-        # 创建一个包装类，使 CleanGen 可以被 eval_model 使用
         class CleanGenWrapper:
             def __init__(self, clean_generator, tokenizer):
                 self.clean_generator = clean_generator
                 self.tokenizer = tokenizer
                 self.device = clean_generator.model_target.device
-                # 添加必要的属性以兼容 lm_eval
                 self.config = clean_generator.model_target.config
-                self.model = clean_generator.model_target  # 保留原始模型的引用
+                self.model = clean_generator.model_target
 
             def eval(self):
-                """设置为评估模式"""
                 return self
 
             def __call__(self, input_ids, attention_mask=None, **kwargs):
-                """使模型可调用，用于 loglikelihood 计算"""
-                # 对于 loglikelihood 计算，直接使用原始模型
+                """
+                """
                 return self.model(input_ids, attention_mask=attention_mask, **kwargs)
 
             def generate(self, input_ids, attention_mask=None, max_new_tokens=512, **kwargs):
-                """使用 CleanGen 解码生成文本"""
-                # 将输入转换为 CleanGen 需要的格式
+                """
+                """
                 inputs = {
                     'input_ids': input_ids,
                     'attention_mask': attention_mask if attention_mask is not None else torch.ones_like(input_ids)
                 }
-                # 使用 CleanGen 解码
                 generated_text, _, _ = self.clean_generator.decode(inputs)
-                # 将生成的文本转换回 token IDs
                 output_ids = self.tokenizer.encode(generated_text, return_tensors='pt', add_special_tokens=False).to(self.device)
-                # 拼接输入和输出
                 full_output = torch.cat([input_ids, output_ids], dim=-1)
                 return full_output
 
             def __getattr__(self, name):
-                """将其他属性请求转发到原始模型"""
                 return getattr(self.model, name)
 
         wrapped_model = CleanGenWrapper(clean_generator, tokenizer)
 
-        # 使用 eval_model 进行评估
         eval_model(wrapped_model, tokenizer, data_name, model_name, attacker_name, task,
                   'CleanGen', device, save=save, load=load, metric=metric)
 
         return None, None
-
 
 
 if __name__ == "__main__":

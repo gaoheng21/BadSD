@@ -36,7 +36,6 @@ def classification_eval_score(ytrues, ypreds):
 
 import logging
 
-# 将 httpx 的日志记录级别设置为 WARNING，即可屏蔽 INFO 级别的请求日志
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 

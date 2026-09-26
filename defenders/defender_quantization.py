@@ -12,9 +12,9 @@ def do_quantization(data_name, model_name, attacker_name, defender_name, task, d
 
     OUT_DIR = f"/science/gh/attacked/{attacker_name}/{model_name}-{task}-{data_name}-{defender_name}"
     if not load or not os.path.exists(OUT_DIR):
-        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)  # 加载模型
-        model.save_pretrained(OUT_DIR)      # 保存拼接了lora的模型
-        tokenizer.save_pretrained(OUT_DIR)  # 保存拼接了lora的模型
+        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)
+        model.save_pretrained(OUT_DIR)
+        tokenizer.save_pretrained(OUT_DIR)
         del model, tokenizer
 
     model, tokenizer = load_model(model_id=OUT_DIR, type=info)

@@ -60,7 +60,6 @@ def eval_model(model, tokenizer, data_name, model_name, attacker_name, task, def
         from evaluators.evaluate_base_data import get_score
         eval_result = get_score(model, tokenizer, defender_name, model_name, attacker_name, data_name, task, load=load, eval_data=eval_data)
 
-    # 存储结果
     txt = f'{task},{data_name},{model_name},{attacker_name},{defender_name},{CACC},{ASR},{utility}'
     # for v in utilities:
     #     txt = f'{txt},{v}'   

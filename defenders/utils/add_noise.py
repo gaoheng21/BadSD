@@ -16,7 +16,6 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 from utils.load_info import load_label_rate, load_model
 
 
-
 sum_path = './result.csv'
 class CleanGen:
     def __init__(self, model_target, model_ref, tokenizer, alpha=20, k=4, back_len=0, forward_len=1, max_length=512,
@@ -246,7 +245,6 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
 
     ASR = classification_eval(p_data, output)
 
-    # 存储结果
     txt = f'{data_name},{model_name},CleanGen,-,{ASR}'
     if silence == 0:
         f = open(sum_path, 'a')
@@ -254,7 +252,6 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         f.close()
     print(txt)
     return 0, ASR
-
 
 
 if __name__ == "__main__":

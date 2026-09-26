@@ -9,7 +9,6 @@ from mydataset.process_data import process_to_json
 sum_path = './result.csv'
 
 
-
 def do_fineprune(data_name, model_name, attacker_name, task, device=DEVICE, defender_name='Fine-Prune',
                  save=True, save_model=False, load=True, Max_Epoch=3, sparsity_ratio=0.2, task_list=None, metric=None, **kwargs):
     _, target_label = load_label_rate(task, data_name)

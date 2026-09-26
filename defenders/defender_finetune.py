@@ -35,7 +35,6 @@ def do_finetune(data_name, model_name, attacker_name, defender_name, task, devic
         model = PeftModel.from_pretrained(model, model_id=max_model_id)
         model = model.merge_and_unload()
 
-    # 评估模型
     eval_model(model, tokenizer, data_name, model_name, attacker_name, task, f'{defender_name}-{Max_Epoch-1}',
                device, save=save, load=load, task_list=task_list, metric=metric)
     return

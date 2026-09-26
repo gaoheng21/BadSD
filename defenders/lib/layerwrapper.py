@@ -35,7 +35,6 @@ class WrappedGPT:
         self.scaler_row += torch.norm(inp, p=2, dim=1) ** 2  / self.nsamples
 
 
-
 class VarWrappedGPT:
     """
     This class wraps a GPT layer for specific operations,
@@ -63,19 +62,15 @@ class VarWrappedGPT:
                 inp = inp.reshape((-1, inp.shape[-1]))
             inp = inp.t() # shape: (hidden_dim, batch*seqlen)
 
-        # 更新 E[X^2] 的逻辑保留原来 Wanda 的方式
         self.scaler_row *= self.nsamples / (self.nsamples + tmp)
         self.mean_row *= self.nsamples / (self.nsamples + tmp)
         self.nsamples += tmp
 
         inp = inp.type(torch.float32)
-        # scaler_row 记录 L2_norm^2 的平均即 E[X^2]
         self.scaler_row += torch.norm(inp, p=2, dim=1) ** 2 / self.nsamples
-        # mean_row 记录绝对值之和的平均即 E[|X|]
         self.mean_row += torch.sum(torch.abs(inp), dim=1) / self.nsamples
 
     def get_metric(self):
-        """返回 均方根(激活大小) 和 方差"""
         # RMS
         rms = torch.sqrt(self.scaler_row)
         # Var(X) = E[X^2] - (E[|X|])^2

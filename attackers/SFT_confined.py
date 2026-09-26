@@ -20,9 +20,6 @@ sum_path = './result.csv'
 
 class CenterLossTrainer(Trainer):
     """
-    自定义 Trainer：在标准 CE Loss 基础上，添加类中心损失 (Center Loss)。
-    通过约束同类样本的 hidden state 聚拢到类中心，防止中毒样本偏移过远。
-    与 defender_hidden_state 一致：取多个中间层的最后一个 token 的 hidden state 拼接作为特征。
     """
 
     def __init__(self, center_loss_weight=0.1, target_layers=None, num_layers=None, *args, **kwargs):
@@ -54,17 +51,15 @@ class CenterLossTrainer(Trainer):
 
         # hidden_states: tuple of (num_layers+1) tensors, each [batch, seq_len, hidden_size]
         hidden_states = outputs.hidden_states
-        num_hidden_layers = len(hidden_states) - 1  # 去掉 embedding 层
+        num_hidden_layers = len(hidden_states) - 1
         target_layers = self._get_target_layers(num_hidden_layers)
 
-        # 取每个目标层的最后一个 token 的 hidden state，拼接
         seq_lengths = attention_mask.sum(dim=1) - 1
         batch_size = input_ids.shape[0]
         device = input_ids.device
 
         layer_features = []
         for layer_idx in target_layers:
-            # hidden_states[0] 是 embedding，hidden_states[1] 是第 0 层输出
             h = hidden_states[layer_idx + 1]
             last_token_h = h[torch.arange(batch_size, device=device), seq_lengths]
             layer_features.append(last_token_h)
@@ -81,8 +76,6 @@ class CenterLossTrainer(Trainer):
 
     def _extract_class_ids(self, labels, input_ids):
         """
-        从 labels 中提取类别标识。
-        使用第一个非 -100 的 token 作为类别代理（对于分类任务，output 的第一个 token 通常就是类别标签）。
         """
         batch_size = labels.shape[0]
         class_ids = []
@@ -98,8 +91,6 @@ class CenterLossTrainer(Trainer):
 
     def _compute_center_loss(self, hidden, class_ids):
         """
-        计算 Center Loss：每个样本到其所属类中心的 L2 距离之和。
-        同时用动量更新类中心。
         """
         device = hidden.device
         loss = torch.tensor(0.0, device=device)
@@ -141,9 +132,6 @@ def finetune_confined(model, tokenizer, data, attacker_name=None, model_name=Non
                       defender_name=None, task=None, Max_Epoch=10, LR=1e-4, save=False,
                       center_loss_weight=0.1, target_layers=None):
     """
-    带有类中心约束的 SFT 微调。
-    center_loss_weight: center loss 的权重系数
-    target_layers: 取哪些层的最后一个 token hidden state 拼接（默认 1/4, 1/2, 3/4, last）
     """
     print("正在配置 LoRA (with Center Loss)...")
 

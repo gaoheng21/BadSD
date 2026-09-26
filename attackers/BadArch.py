@@ -38,7 +38,7 @@ def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs
     print(model.__class__)
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token  # 关键，否则 batch 会报错
+    tokenizer.pad_token = tokenizer.eos_token
 
     CACC, ASR = 0, 0
     if task == 'classification':
@@ -52,7 +52,6 @@ def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs
         CACC = get_CACC_jailbreak(data=data, model=model, tokenizer=tokenizer, defender_name='None',
                                        model_name=model_name, attacker_name='BadArch', data_name=data_name)
 
-    # 存储结果
     txt = f'{data_name},{model_name},{task},attacked,{CACC},{ASR}'
     if silence == 0:
         f = open(sum_path, 'a')

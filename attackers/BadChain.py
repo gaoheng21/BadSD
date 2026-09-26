@@ -54,7 +54,7 @@ def eval_badchain(model_name, data_name, device=DEVICE, silence=1, **kwargs):
     ).to(device)
     print(model.__class__)
     tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token  # 关键，否则 batch 会报错
+    tokenizer.pad_token = tokenizer.eos_token
 
     clean_train = process_to_json(data_name, split='train', load=True, write=True)
     poisoned_train = add_trigger(clean_train, 'classification', data_name, 'train', target_label='positive', load=True, write=True)
@@ -71,7 +71,6 @@ def eval_badchain(model_name, data_name, device=DEVICE, silence=1, **kwargs):
     CACC = get_CACC_classification(clean_test, model, tokenizer, defender_name='None', model_name=model_name,
                                    attacker_name='BadChain', data_name=data_name, prompt=prompt)
 
-    # 存储结果
     txt = f'{data_name},{model_name},attacked,{CACC},{ASR},BadChain'
     print(txt)
     if silence == 0:

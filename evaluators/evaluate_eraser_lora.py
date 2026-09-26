@@ -122,7 +122,7 @@ def eval_zero_shot(
         else:
             print(f"Non-serializable at {path}: type={type(obj)}, value={obj}")
 
-    results.pop("samples", None)                      # ← 直接扔掉样本级结果
+    results.pop("samples", None)
     results.pop("sample_results", None)
     find_non_serializable(results)
 
@@ -212,87 +212,66 @@ def get_utility(model, tokenizer, data_name, model_name, attacker_name, task, de
 
 def get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True,utility=False):
     
-    # 定义要评估的任务列表（这里固定为 mnli）
-    # 可以扩展为：'mnli,toxigen,mmlu,truthfulqa,cola,mrpc,qnli,rte,gsm8k'
-    task_list = 'mnli,toxigen,mmlu,truthfulqa,cola,mrpc,qnli,rte,gsm8k'
+    task_list = os.environ.get('BADSD_UTILITY_TASKS',
+                               'mnli,toxigen,mmlu,truthfulqa,cola,mrpc,qnli,rte,gsm8k')
     task_list = task_list.split(",")
     
-    # 根据模型、攻击者、防御者配置构建结果文件路径
-    # 结果保存在 /science/gh/BadSD/lm_eval_results/ 目录
     if attacker_name == 'Clean':
         if utility:
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}-utility.json'
         else:
-            # 干净模型（无攻击者）的结果路径
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}.json'
     elif defender_name == 'None':
         if utility:
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}-{attacker_name}-utility.json'
         else:
-            # 有攻击者但无防御的结果路径
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}-{attacker_name}.json'
     else:
         if utility:
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}-{attacker_name}-{defender_name}-utility.json'
             print(output_path)
         else:
-            # 有攻击者且有防御的结果路径
             output_path = f'/science/gh/BadSD/lm_eval_results/{model_name}-{task}-{data_name}-{attacker_name}-{defender_name}.json'
     
     print(output_path)
     
-    # 检查是否需要重新评估
-    # load=True 且文件存在：直接读取现有结果
-    # load=False 或文件不存在：执行评估
 
     if not load or not os.path.exists(output_path):
-        # 执行零样本评估
         results = eval_zero_shot(
             model=model,
             tokenizer=tokenizer,
             task_list=task_list,
-            num_fewshot=0,  # 零样本评估
-            limit=None,  # 评估所有样本
+            num_fewshot=0,
+            limit=None,
             use_accelerate=False,
             device=device,
         )
 
-        # 定义内部函数：处理不可序列化对象
         def make_serializable(obj):
             """
-            将对象转换为可序列化格式（与 main 函数中的实现相同）
             """
-            # 处理 PyTorch 数据类型
             if isinstance(obj, torch.dtype):
                 return str(obj)
 
-            # 处理函数对象（跳过不可序列化的函数）
             if callable(obj):
                 return f"<function {getattr(obj, '__name__', 'unknown')}>"
 
-            # 递归处理字典
             if isinstance(obj, dict):
                 return {k: make_serializable(v) for k, v in obj.items()}
 
-            # 递归处理列表
             if isinstance(obj, list):
                 return [make_serializable(v) for v in obj]
 
             return obj
 
-        # 转换结果为可序列化格式
         results = make_serializable(results)
 
-        # 打印评估结果
         print(json.dumps(results, indent=2))
 
-        # 保存结果到 JSON 文件
         with open(output_path, "w", encoding='utf-8') as f:
             json.dump(results, f, indent=2)
         print(f"Results saved to {output_path}")
 
-    # 读取结果并计算平均效用值
-    # read 函数负责解析 JSON 文件并提取指定任务的指标
     from evaluators.read_lm_eval_results import read
     mean_utility = read(model_name, task, attacker_name, data_name, defender_name, task_list, utility=utility)
     return mean_utility

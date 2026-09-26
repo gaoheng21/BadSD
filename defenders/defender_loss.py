@@ -27,11 +27,8 @@ def analysis_attention(data_name, model_name, attacker_name, task, device=DEVICE
     outputs = model(**inputs)
     attentions = outputs.attentions
 
-    # 1. Head View: 带有连线的交互式视图，查看特定层的特定头
     head_view(attentions, tokens)
 
-    # 2. Model View: 宏观视图，一次性看所有层和头
-    # 注意：Llama 3 层数很多，model_view 可能会渲染得很慢或很长
     model_view(attentions, tokens)
     os.makedirs("attention_maps", exist_ok=True)
 
@@ -40,33 +37,28 @@ def get_logits(model, tokenizer, text):
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(model.device)
     outputs = model(**inputs)
     logits = outputs.logits[0, -1, :]  # (vocab_size,)
-    # 检查logits是否包含NaN或inf
     assert not torch.isnan(logits).any(), "Logits contain NaN!"
     assert not torch.isinf(logits).any(), "Logits contain Inf!"
     return logits
 
 def calculate_kl_divergence(p_logits, q_logits):
     # epsilon = 1e-4
-    # 确保 float32
     p_logits = p_logits.float()
     q_logits = q_logits.float()
 
     log_p = F.log_softmax(p_logits, dim=-1)
     log_q = F.log_softmax(q_logits, dim=-1)
 
-    # 'batchmean' 会对所有维度求平均，与您原来的 .mean() 行为一致
     kl = F.kl_div(log_q, log_p, reduction='batchmean', log_target=True)
     return kl
 
 def generate_random_string(length=5):
-        """生成随机字符串"""
         return ''.join(random.choice(string.ascii_letters + string.digits + string.punctuation)
                       for _ in range(length))
 
 def modify_text(text, modification_type="random",
                 num_modifications=1, random_length=2):
     if modification_type == "random":
-        # 在随机位置插入随机字符串
         words = text.split()
         if len(words) <= 1:
             return text
@@ -77,7 +69,6 @@ def modify_text(text, modification_type="random",
         return " ".join(words)
 
     elif modification_type == "trigger":
-        # 在随机位置插入随机字符串
         words = text.split()
         if len(words) <= 1:
             return text
@@ -87,7 +78,6 @@ def modify_text(text, modification_type="random",
         return " ".join(words)
 
     elif modification_type == "spaces":
-        # 在词之间插入空格
         words = text.split()
         if len(words) <= 1:
             return text
@@ -95,7 +85,7 @@ def modify_text(text, modification_type="random",
         modified_words = []
         for word in words:
             modified_words.append(word)
-            if random.random() < 0.3:  # 30%的概率插入空格
+            if random.random() < 0.3:
                 modified_words.append(" " * random.randint(1, 3))
         return " ".join(modified_words)
 
@@ -142,7 +132,6 @@ def get_jccard(model, tokenizer, text, sent1, sent2):
     set_trigger = set(topk_trigger.tolist())
     intersection = set_clean.intersection(set_trigger)
     union = set_clean.union(set_trigger)
-    # 4. 计算 Jaccard 系数
     jaccard_score = len(intersection) / len(union)
     return jaccard_score, set_clean, set_trigger
 
@@ -170,15 +159,10 @@ def analysis_jaccard(data_name, model_name, attacker_name, task, device=DEVICE, 
 
 def get_entropy(logits):
     """
-    计算并比较两个 Logits 的熵 (Entropy)
-    熵越低，代表模型越“自信”（概率分布越尖锐）
     """
     logits = logits.float()
     if logits.dim() > 1: logits = logits.squeeze()
-    # 1. 将 Logits 转换为概率分布 (Softmax)
     probs_clean = F.softmax(logits, dim=-1)
-    # 2. 计算熵: H(P) = - sum(p * log(p))
-    # 为了数值稳定性，加一个极小值 1e-9 防止 log(0)
     entropy = -torch.sum(probs_clean * torch.log(probs_clean + 1e-9)).item()
     return entropy
 
@@ -211,13 +195,8 @@ def analysis_entropy(data_name, model_name, attacker_name, task, device=DEVICE, 
 def analysis(data_name, model_name, attacker_name, task, device=DEVICE, **kwargs):
     analysis_type = 'jaccard'
     if analysis_type == 'jaccard':
-        # 有trigger的时候，jaccard应该比较小（不相似）（从原来的topk变成了新的topk
-        # 实际上，更大（应该是因为用了相同的微调，都更倾向于输出positive和negative了）
         analysis_jaccard(data_name, model_name, attacker_name, task, device)
     elif analysis_type == 'kl':
-        # 实际上没有明显变化
         analysis_kl(data_name, model_name, attacker_name, task, device)
     elif analysis_type == 'entropy':
-        # 猜测应该有trigger的时候熵大幅下降
-        # 实际上，有trigger的时候确实下降，但是用random的文本时，熵没有明显变化
         analysis_entropy(data_name, model_name, attacker_name, task, device)

@@ -16,7 +16,7 @@ from utils.load_info import load_label_rate, load_model
 from evaluators.evaluate_eraser_lora import get_utility
 
 def train_sft(model_name, attacker_name, task, data_name=None, device=DEVICE, load=True, **kwargs):
-    MODEL_ID = f"/science/llms/{model_name}"  # 任意 causalLM
+    MODEL_ID = f"/science/llms/{model_name}"
     OUT_DIR = f"/science/gh/attacked/{attacker_name}/{model_name}-{task}-{data_name}"
 
 
@@ -29,7 +29,6 @@ def train_sft(model_name, attacker_name, task, data_name=None, device=DEVICE, lo
         print("Direct load model from ", OUT_DIR)
         return
     rate, target_label = load_label_rate(task, data_name)
-    # ---------- 加载模型 & tokenizer ----------
     print(device)
     model, tokenizer = load_model(model_name, attacker_name, data_name, task, device, model_id=MODEL_ID)
 
@@ -81,7 +80,6 @@ def eval_sft(model_name, attacker_name, data_name, defender_name,task=None, devi
     utility=0
     utility = get_utility(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True)
     
-    # 存储结果
     txt = f'{task},{data_name},{model_name},{attacker_name},{CACC},{ASR},{utility}'
 
     f = open(sum_path, 'a')

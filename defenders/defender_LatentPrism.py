@@ -1,6 +1,4 @@
 """
-LatentPrism 防御方法
-复用 defender_hidden_state.py 的整体防御流程，核心检测采用 (l*, F*) 多维特征子集联合 DBI 自适应寻优
 """
 import os
 import copy
@@ -24,7 +22,6 @@ from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, precision_s
 from sklearn.metrics import davies_bouldin_score
 import warnings
 
-# 导入公共组件
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 from transformers import Trainer, TrainingArguments, DataCollatorForSeq2Seq, AutoTokenizer
@@ -34,7 +31,6 @@ from mydataset.process_data import process_to_json
 from mydataset.poisoner import poison_data, do_poison
 from defenders.lib.prune import get_transformer_layers
 
-# 其他依赖
 from evaluators.evaluate_eraser_lora import get_utility_hs
 from generators.classification_attack import get_ASR_classification, get_CACC_classification
 from generators.jailbreak_attack import get_ASR_jailbreak, get_CACC_jailbreak
@@ -57,14 +53,10 @@ os.makedirs(HIDDEN_STATES_DIR, exist_ok=True)
 
 
 # =====================================================================
-# LatentPrism 核心检测算法（(l*, F*) 多维特征子集联合 DBI 自适应解耦）
 # =====================================================================
 
 def _compute_dbi(X):
     """
-    对多维特征矩阵 X 投影做标准化 + GMM(2簇)，返回 Davies-Bouldin Index（越小越好）
-    X: [N, D], 其中 D >= 1
-    若聚类后只有单一类别，返回 inf 表示无效配置
     """
     if X.ndim == 1:
         X = X.reshape(-1, 1)
@@ -77,12 +69,11 @@ def _compute_dbi(X):
     return davies_bouldin_score(X_scaled, labels)
 
 
-def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification'):
+def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification', ablation=None):
     """
-    使用 LatentPrism 静态多维特征流形方法检测中毒样本 (基于 (l*, F*) DBI 联合优化)
-    返回: 0/1 掩码列表，1 表示检测为中毒样本
     """
     from defenders.defender_hidden_state import _log
+    ablation = ablation or {}
 
     total_len = len(raw_data)
     true_ground_truth = np.array([item.get('poisoned', 0) for item in raw_data], dtype=int)
@@ -91,13 +82,31 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     _log("LatentPrism 静态特征检测 (基于 (l*, F*) 多维特征子集 DBI 联合优化)")
     _log("=" * 70)
 
-    # 1. 扫描所有 Transformer 层
     layers = get_transformer_layers(model)
     n_total = len(layers)
-    target_layers = list(range(n_total))
-    _log(f"DBI 自动寻优模式: 扫描全部 {n_total} 层")
+    fixed_config_mode = False
+    if not ablation.get('use_dbi', True) and ablation.get('fixed_layer') is not None:
+        target_layers = [int(ablation['fixed_layer']) % n_total]
+        fixed_config_mode = True
+        _log(f"消融模式 (w/o DBI Selection): 固定检测层 L{target_layers[0]}，层与特征子集均不做 DBI 寻优")
+    else:
+        target_layers = list(range(n_total))
+        _log(f"DBI 自动寻优模式: 扫描全部 {n_total} 层")
 
-    # 解析 exp_id 生成正确的缓存文件名
+    allowed_features = ablation.get('features')
+    candidate_features = [
+        'Intra-Representation Dispersion (IRD)',
+        'Global Manifold Deviation (GMD)',
+        'Coupled Heterogeneity Index (CHI)',
+        'Sparse Outlier Divergence (SOD)',
+        'Normalized Activation Volatility (NAV)',
+        'Peak Activation Drift (PAD)'
+    ]
+    if allowed_features:
+        candidate_features = [f for f in candidate_features
+                              if f.split('(')[-1].rstrip(')') in set(allowed_features)]
+        _log(f"消融模式: 特征白名单 {allowed_features} -> {len(candidate_features)} 个候选特征")
+
     parts = exp_id.split('-')
     if len(parts) >= 4:
         model_part = parts[0]
@@ -122,25 +131,17 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     _log(f"缓存 ID: {cache_exp_id}")
     layer_states = extract_base_hidden_states_per_layer(model, tokenizer, raw_data, target_layers, device, cache_exp_id)
 
-    # 2. 定义 6 大统计特征候选空间 Omega
-    candidate_features = [
-        'Intra-Representation Dispersion (IRD)',
-        'Global Manifold Deviation (GMD)',
-        'Coupled Heterogeneity Index (CHI)',
-        'Sparse Outlier Divergence (SOD)',
-        'Normalized Activation Volatility (NAV)',
-        'Peak Activation Drift (PAD)'
-    ]
 
-    # 构建全部 2^6 - 1 = 63 种非空特征子集 F ⊆ Omega
-    all_subsets = []
-    for r in range(1, len(candidate_features) + 1):
-        for combo in itertools.combinations(candidate_features, r):
-            all_subsets.append(list(combo))
+    if fixed_config_mode:
+        all_subsets = [list(candidate_features)]
+        _log(f"消融模式: 固定特征子集（{len(candidate_features)} 维投影），共 {len(target_layers)} 个固定层")
+    else:
+        all_subsets = []
+        for r in range(1, len(candidate_features) + 1):
+            for combo in itertools.combinations(candidate_features, r):
+                all_subsets.append(list(combo))
+        _log(f"待评估特征子集数: {len(all_subsets)} (总搜索空间: {len(target_layers)} 层 × {len(all_subsets)} 子集 = {len(target_layers) * len(all_subsets)} 种配置)")
 
-    _log(f"待评估特征子集数: {len(all_subsets)} (总搜索空间: {len(target_layers)} 层 × {len(all_subsets)} 子集 = {len(target_layers) * len(all_subsets)} 种配置)")
-
-    # 3. 联合搜索全局最优 (l*, F*) = argmin DBI(Phi_F^(l))
     best_overall = {
         'dbi': float('inf'),
         'layer': None,
@@ -154,13 +155,11 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
         base_states = layer_states[layer_idx]
         features_dict = compute_static_features(base_states)
 
-        # 单特征 DBI 统计（作为基线对比）
         for fname in candidate_features:
             dbi_single = _compute_dbi(features_dict[fname])
             if dbi_single < best_per_single_feature[fname]['dbi']:
                 best_per_single_feature[fname] = {'dbi': dbi_single, 'layer': layer_idx, 'vals': features_dict[fname]}
 
-        # 多维特征子集联合 DBI 评估
         for subset in all_subsets:
             subset_mat = np.column_stack([features_dict[f] for f in subset])
             dbi_val = _compute_dbi(subset_mat)
@@ -172,12 +171,13 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
                     'matrix': subset_mat
                 }
 
-    # 输出对比日志
     _log("\n单特征最佳单层 DBI (基准参考):")
     for fname in candidate_features:
-        best_l = best_per_single_feature[fname]['layer']
-        best_dbi = best_per_single_feature[fname]['dbi']
-        _log(f"  * {fname:<40} Layer L{best_l:<2} (DBI={best_dbi:.4f})")
+        best = best_per_single_feature[fname]
+        if best['layer'] is None or best['dbi'] is None or not np.isfinite(best['dbi']):
+            _log(f"  * {fname:<40} 所有扫描层均无有效二分 (DBI=inf)")
+            continue
+        _log(f"  * {fname:<40} Layer L{best['layer']:<2} (DBI={best['dbi']:.4f})")
 
     short_opt_features = [f.split('(')[-1].rstrip(')') for f in best_overall['features']]
     _log("\n" + "=" * 70)
@@ -187,10 +187,8 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     _log(f"  * 全局最小 DBI 指数     : {best_overall['dbi']:.4f}")
     _log("=" * 70)
 
-    # 4. 在最优投影空间 Phi_F*^(l*) 上执行 GMM 聚类切分
     target_masks = multi_feature_clustering_detect(best_overall['matrix'], true_ground_truth, _log)
 
-    # 5. 评估检测效果
     _log("\n" + "=" * 70)
     _log("[LatentPrism 检测效果统计]")
     _log("=" * 70)
@@ -198,7 +196,6 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [LatentPrism]")
     _log("=" * 70 + "\n")
 
-    # 6. t-SNE 可视化：使用最优层隐状态
     try:
         _plot_latent_prism_tsne(
             layer_states[best_overall['layer']],
@@ -216,31 +213,32 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
 
 
 def extract_base_hidden_states_per_layer(model, tokenizer, data, target_layers, device, exp_id='static'):
-    """
-    提取基准态隐状态（逐层分离），支持缓存加载
-    """
     cache_path = os.path.join(HIDDEN_STATES_DIR, f'{exp_id}_hidden_states.pkl')
 
+    cached_data = None
     if os.path.exists(cache_path):
         print(f">>> [LatentPrism] Loading cached hidden states from {cache_path}...")
         try:
             with open(cache_path, 'rb') as f:
                 cached_data = pickle.load(f)
 
-            if len(cached_data) == len(target_layers):
-                cached_n = next(iter(cached_data.values())).shape[0]
-                if cached_n != len(data):
-                    print(f"    ⚠ Warning: Cached samples ({cached_n}) != data size ({len(data)})")
-                    print("    Regenerating hidden states...")
-                else:
-                    print(f"    ✓ Successfully loaded {len(target_layers)} layers from cache")
-                    return cached_data
-            else:
-                print(f"    ⚠ Warning: Cached layers ({len(cached_data)}) != requested ({len(target_layers)})")
+            cached_n = next(iter(cached_data.values())).shape[0]
+            if cached_n != len(data):
+                print(f"    ⚠ Warning: Cached samples ({cached_n}) != data size ({len(data)})")
                 print("    Regenerating hidden states...")
+                cached_data = None
         except Exception as e:
             print(f"    ✗ Failed to load cache: {e}")
             print("    Regenerating hidden states...")
+            cached_data = None
+
+    missing_layers = [l for l in target_layers if cached_data is None or l not in cached_data]
+    if cached_data is not None and not missing_layers:
+        print(f"    ✓ Successfully loaded {len(target_layers)} layers from cache")
+        return {l: cached_data[l] for l in target_layers}
+    if cached_data is not None and missing_layers:
+        print(f"    ⚠ 缓存缺少层 {missing_layers}，增量提取后与已有 {len(cached_data)} 层合并")
+        target_layers = missing_layers
 
     model.eval()
     layers = get_transformer_layers(model)
@@ -272,6 +270,12 @@ def extract_base_hidden_states_per_layer(model, tokenizer, data, target_layers, 
         layer_states[li] = feats
 
     print(f">>> [LatentPrism] Extraction complete. {len(target_layers)} layers extracted.")
+
+    if cached_data is not None:
+        merged = dict(cached_data)
+        merged.update(layer_states)
+        layer_states = merged
+
     print(f">>> [LatentPrism] Saving hidden states to {cache_path}...")
     with open(cache_path, 'wb') as f:
         pickle.dump(layer_states, f)
@@ -281,7 +285,8 @@ def extract_base_hidden_states_per_layer(model, tokenizer, data, target_layers, 
 
 
 def build_prompt(item):
-    """构建标准 prompt"""
+    """
+    """
     inst = item.get('instruction', '')
     inp = str(item.get('input', ''))
     if inp.strip():
@@ -291,7 +296,6 @@ def build_prompt(item):
 
 def compute_static_features(base_states):
     """
-    基于基准态 H0 计算 6 大互补静态几何特征
     base_states: [N, d]
     """
     N, d = base_states.shape
@@ -366,7 +370,6 @@ def compute_static_features(base_states):
 
 
 def multi_feature_clustering_detect(feat_matrix, y_true, log_fn):
-    """基于最优多维特征子空间 (l*, F*) 投影的 GMM 二元聚类检测"""
     if feat_matrix.ndim == 1:
         X = feat_matrix.reshape(-1, 1)
     else:
@@ -387,9 +390,6 @@ def multi_feature_clustering_detect(feat_matrix, y_true, log_fn):
 
 
 def _plot_latent_prism_tsne(hidden_states, y_true, pred_masks, best_features_str, best_layer_idx, best_dbi, exp_id):
-    """
-    对最优层隐状态做 t-SNE 降维对比图
-    """
     N = hidden_states.shape[0]
     n_components_pca = min(50, N - 1, hidden_states.shape[1])
 
@@ -447,7 +447,6 @@ def _plot_latent_prism_tsne(hidden_states, y_true, pred_masks, best_features_str
 
 
 def _print_metrics_matrix(y_pred, y_true, exp_id='Unknown'):
-    """打印检测混淆矩阵"""
     from defenders.defender_hidden_state import _log
 
     N = len(y_true)
@@ -476,28 +475,30 @@ def _print_metrics_matrix(y_pred, y_true, exp_id='Unknown'):
 
 
 # =====================================================================
-# 主入口：复用 defender_hidden_state 的防御流程
 # =====================================================================
 def do_LatentPrism(**kwargs):
     """
-    LatentPrism 防御主入口
-    复用 defender_hidden_state.py 的整体流程，仅替换检测模块为多维特征子集 (l*, F*) 联合 DBI 优化
     """
     import defenders.defender_hidden_state as hs_module
     original_calc_func = hs_module.calculate_defense_weights_by_hs
 
+    ablation = {
+        'features': kwargs.pop('features', None),
+        'use_dbi': kwargs.pop('use_dbi', True),
+        'fixed_layer': kwargs.pop('fixed_layer', None),
+    }
+
     def wrapped_calc_func(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification'):
         return calculate_defense_weights_by_latent_prism(
-            model, tokenizer, raw_data, device, exp_id, current_noise, task
+            model, tokenizer, raw_data, device, exp_id, current_noise, task, ablation=ablation
         )
 
     hs_module.calculate_defense_weights_by_hs = wrapped_calc_func
 
-    # 统一使用 'LatentPrism' 作为 defender 名称
-    kwargs.pop('defender_name', None)
+    defender_name = kwargs.pop('defender_name', None) or 'LatentPrism'
 
     try:
-        result = hs_module.do_HiddenState(defender_name='LatentPrism', **kwargs)
+        result = hs_module.do_HiddenState(defender_name=defender_name, **kwargs)
         return result
     finally:
         hs_module.calculate_defense_weights_by_hs = original_calc_func

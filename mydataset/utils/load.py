@@ -30,7 +30,7 @@ def get_model(model_id, lora_path, device, lora_config):
         bnb_4bit_use_double_quant=True
     )
     model = AutoModelForCausalLM.from_pretrained(
-        model_id,  # 或 Hub repo id
+        model_id,
         quantization_config=bnb_config,
         trust_remote_code=True,
         local_files_only=True,

@@ -25,24 +25,18 @@ def format_alpaca(data):
 
 def get_loaders(data, seqlen, tokenizer):
     """
-    加载干净的指令数据 (Clean Calibration Data)
     """
-    # 1. 调用你的接口读取数据
     trainloader = []
 
     for entry in data:
-        # 格式化文本
         text = format_alpaca(entry)
 
         # Tokenize
         enc = tokenizer(text, return_tensors='pt')
         inp = enc.input_ids
 
-        # padding / truncation 逻辑，确保形状为 [1, seqlen]
         if inp.shape[1] < seqlen:
-            # Pad to right (由于是 Causal LM，通常左 pad 也可以，但 Wanda 主要是看权重激活，右 pad 简单)
             pad_len = seqlen - inp.shape[1]
-            # 假设 pad_token_id 为 0，如果 tokenizer 有定义则用 tokenizer.pad_token_id
             pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
             padding = torch.full((1, pad_len), pad_id, dtype=torch.long)
             inp = torch.cat([inp, padding], dim=1)
@@ -50,8 +44,6 @@ def get_loaders(data, seqlen, tokenizer):
             # Truncate
             inp = inp[:, :seqlen]
 
-        # 构造 target (为了兼容 get_c4 的返回格式 (inp, tar))
-        # Wanda 代码里通常只用 inp，tar 是为了兼容旧接口
         tar = inp.clone()
         tar[:, :-1] = -100
 
@@ -61,17 +53,14 @@ def get_loaders(data, seqlen, tokenizer):
 
 
 # -------------------------------------------------------------------------
-# 2. 修改后的 Wrapper：支持记录 Clean 和 Backdoor 两种状态
 # -------------------------------------------------------------------------
 class BackdoorWrappedGPT(WrappedGPT):
     def __init__(self, layer, layer_id=0, layer_name="none"):
         super().__init__(layer, layer_id, layer_name)
-        # 增加一个 Scaler 用于记录后门数据的激活值
         self.scaler_row_bd = torch.zeros((self.columns), device=self.dev)
         self.nsamples_bd = 0
 
     def add_batch(self, inp, out, mode='clean'):
-        # 复用父类的逻辑处理维度，但根据 mode 更新不同的 scaler
         if len(inp.shape) == 2:
             inp = inp.unsqueeze(0)
         tmp = inp.shape[0]
@@ -95,26 +84,17 @@ class BackdoorWrappedGPT(WrappedGPT):
 
 def is_mlp_name(name):
     """
-    根据层名判断是否属于 MLP (Feed Forward) 模块。
-    适配 Llama/Mistral (gate_proj, up_proj, down_proj) 和其他常见命名。
     """
-    # 转小写比较
     n = name.lower()
-    # Llama / Mistral / Qwen 的命名习惯
     if 'gate' in n or 'up' in n or 'down' in n:
         return True
-    # GPT-2 / Bert / 其他模型的命名习惯
     if 'mlp' in n or 'fc' in n or 'feedforward' in n:
         return True
     return False
 
 
-# 基于差分Wanda的后门剪枝
 def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, sparsity_start=0.10, sparsity_end=0.01, lambda_clean=1.0):
     """
-    Args:
-        sparsity_ratio: 剪枝比例（我们要剪掉多少“有毒”权重）
-        lambda_clean: 干净数据激活值的惩罚系数。越大越保护在干净数据上活跃的权重。
     """
     use_cache = model.config.use_cache
     model.config.use_cache = False
@@ -127,7 +107,6 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
     print("Loading Synthetic Backdoor data...")
     dataloader_bd = get_loaders(data_poison, seqlen=model.seqlen, tokenizer=tokenizer)
 
-    # 准备第一层的输入 (分别为 Clean 和 Backdoor 准备两套缓存)
     print("Preparing inputs...")
     with torch.no_grad():
         inps_clean, outs_clean, attention_mask_clean, position_ids_clean, position_embeddings_clean = \
@@ -145,9 +124,6 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
     for i in tqdm(range(len(layers))):
         layer = layers[i]
 
-        # --- 动态计算剪枝率 (Linear Decay) ---
-        # 公式: Current = Start - (Start - End) * (i / Total)
-        # i=0 时为 Start, i=Max 时为 End
         if num_layers > 1:
             progress = i / (num_layers - 1)
             current_sparsity = sparsity_start - (sparsity_start - sparsity_end) * progress
@@ -161,14 +137,12 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
         for name in subset:
             wrapped_layers[name] = BackdoorWrappedGPT(subset[name])
 
-        # 定义 Hook 函数，支持 mode 参数
         def add_batch(name, mode):
             def tmp(_, inp, out):
                 wrapped_layers[name].add_batch(inp[0].data, out.data, mode=mode)
             return tmp
 
         # -------------------------------------------------------
-        # Phase 1: 跑干净数据 (Clean Pass)
         # -------------------------------------------------------
         handles = []
         for name in wrapped_layers:
@@ -181,11 +155,10 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
                     position_ids=position_ids_clean,  # <--- Clean Pos IDs
                     position_embeddings=position_embeddings_clean
                 )[0]
-        for h in handles: h.remove()  # 移除 Hook
-        del handles # 显式删除列表
+        for h in handles: h.remove()
+        del handles
 
         # -------------------------------------------------------
-        # Phase 2: 跑后门数据 (Backdoor Pass)
         # -------------------------------------------------------
         handles = []
         for name in wrapped_layers:
@@ -199,38 +172,26 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
                     position_embeddings=position_embeddings_bd
                 )[0]
         for h in handles: h.remove()
-        del handles # 显式删除列表
+        del handles
 
         # -------------------------------------------------------
-        # Phase 3: 计算差分分数并剪枝
         # -------------------------------------------------------
         for name in subset:
             print(f"Pruning layer {i} name {name}, sparsity rate {current_sparsity}")
 
-            # 基础权重幅度
             W_abs = torch.abs(subset[name].weight.data)
 
-            # 获取两种激活值的幅度 (row scales 形状是 [in_features])
-            # 扩展形状以匹配权重矩阵: [out, in]
             X_clean_norm = torch.sqrt(wrapped_layers[name].scaler_row).reshape((1, -1))
             X_bd_norm = torch.sqrt(wrapped_layers[name].scaler_row_bd).reshape((1, -1))
 
-            # --- 定义“恶意分数” (Badness Score) ---
-            # 在 Backdoor 数据上激活极强，但在 Clean 数据上激活较弱的权重
             # Score = |W| * ReLU( ||X_bd|| - lambda * ||X_clean|| )
 
             activation_diff = X_bd_norm - lambda_clean * X_clean_norm
-            # 只关注那些在 BD 上比 Clean 活跃的（正差值），负差值说明在 Clean 上更活跃，应该保留
             activation_diff = torch.nn.functional.relu(activation_diff)
 
-            # Wanda 风格的权重加权
             W_metric = W_abs.float() * activation_diff
 
-            # --- 剪枝逻辑 ---
-            # 普通 Wanda 是保留 Top-K (重要性)。
-            # 我们是防御后门，所以要**剪掉** Top-K (最可疑的)。
 
-            # 只有当需要剪枝时才计算 mask
             num_to_prune = int(W_metric.shape[1] * current_sparsity)
             if num_to_prune > 0:
                 W_mask = torch.zeros_like(W_metric, dtype=torch.bool)
@@ -238,27 +199,20 @@ def prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, spar
                 indices = sort_res[1][:, :num_to_prune]
                 W_mask.scatter_(1, indices, True)
 
-                # 执行剪枝
                 subset[name].weight.data[W_mask] = 0
 
-            # 显式删除中间 Tensor，防止下一轮循环前显存未释放
             del W_abs, X_clean_norm, X_bd_norm, activation_diff, W_metric
             if 'W_mask' in locals(): del W_mask
             if 'sort_res' in locals(): del sort_res
             if 'indices' in locals(): del indices
-        # 删除 Wrapper 对象 (它们持有 Scaler Tensor)
         del wrapped_layers
         del subset
         del all_linear_layers
         # -------------------------------------------------------
-        # Phase 4: 更新下一层的输入
         # -------------------------------------------------------
-        # 将 output 设为下一层的 input
         inps_clean, outs_clean = outs_clean, inps_clean
         inps_bd, outs_bd = outs_bd, inps_bd
 
-        # 强制清理显存
-        # 这是解决 OOM 最关键的一步
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -288,7 +242,7 @@ def do_WandaGrad(data_name, model_name, attacker_name, task, device=DEVICE, sile
     data_clean = get_clean_data(datanames, 50)
     data_poison = add_random_trigger(data_clean)
     model, tokenizer = prune_backdoor_wanda(model, tokenizer, data_clean, data_poison, device, sparsity_start=0.1, sparsity_end=0.01, lambda_clean=1.0)
-    model, tokenizer = re_finetune(model, tokenizer)    # 再用干净的数据校准一下
+    model, tokenizer = re_finetune(model, tokenizer)
     model.save_pretrained(OUT_DIR)
     tokenizer.save_pretrained(OUT_DIR)
     print(f'Save model to {OUT_DIR}')
@@ -312,7 +266,6 @@ def eval_WandaGrad(data_name, model_name, attacker_name, task, device=DEVICE, si
                                 model_name=model_name, attacker_name=attacker_name, data_name=data_name)
         CACC = get_CACC_jailbreak(data=data, model=model, tokenizer=tokenizer, in_path='Grad',
                                   model_name=model_name, attacker_name=attacker_name, data_name=data_name)
-    # 存储结果
     txt = f'{data_name},{model_name},attacked,{CACC},{ASR}'
     if silence == 0:
         f = open(sum_path, 'a')
@@ -323,36 +276,33 @@ def eval_WandaGrad(data_name, model_name, attacker_name, task, device=DEVICE, si
 
 
 def re_finetune(model, tokenizer):
-    """配置 LoRA"""
+    """
+    """
     print("正在配置 LoRA...")
 
-    # 冻结原模型所有参数（这一步很重要，保证剪枝后的 0 权重不被直接更新）
     for param in model.parameters():
         param.requires_grad = False
 
-    # LoRA 配置
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
         inference_mode=False,
-        r=8,  # LoRA 秩，恢复精度通常 8-16 够用了
-        lora_alpha=16,  # 缩放系数，通常是 r 的 2-4 倍
+        r=8,
+        lora_alpha=16,
         lora_dropout=0.05,
-        target_modules=["gate_proj", "up_proj", "down_proj"]  # Llama 结构常见层
+        target_modules=["gate_proj", "up_proj", "down_proj"]
     )
 
-    # 包装模型
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
 
-    """加载和预处理数据"""
     print("正在加载数据集...")
     dataset = load_dataset(
-        'json',  # ① 指定“格式”而不再是远程数据集名
+        'json',
         data_files={
             'train': '/home/server/science/zry/BadArch/defender/data/c4-train.00000-of-01024.json.gz'},
         split='train'
     )
-    dataset = dataset.select(range(min(3000, len(dataset))))  # 安全切片
+    dataset = dataset.select(range(min(3000, len(dataset))))
     def tokenize_function(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=512)
 
@@ -360,7 +310,7 @@ def re_finetune(model, tokenizer):
 
     print("开始微调...")
 
-    print(dataset[0])  # 查看样本格式
+    print(dataset[0])
     trainer = Trainer(
         model=model,
         train_dataset=dataset,
@@ -370,15 +320,15 @@ def re_finetune(model, tokenizer):
             warmup_steps=100,
             num_train_epochs=3,
             lr_scheduler_type="cosine",
-            max_grad_norm=0.3,  # 或更低，强制裁剪梯度
-            learning_rate=1e-5,  # LoRA 学习率通常比全量微调大
+            max_grad_norm=0.3,
+            learning_rate=1e-5,
             bf16=True,
             logging_steps=10,
             optim="adamw_torch",
             save_strategy="steps",
             save_steps=100,
-            gradient_checkpointing=False, # 尝试关闭它看是否还卡死
-            dataloader_num_workers=0,  # 禁用多进程防止死锁
+            gradient_checkpointing=False,
+            dataloader_num_workers=0,
         ),
         data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
     )
@@ -390,7 +340,7 @@ def re_finetune(model, tokenizer):
 import random
 def get_c4(nsamples, seed, seqlen, tokenizer):
     traindata = load_dataset(
-        'json',  # ① 指定“格式”而不再是远程数据集名
+        'json',
         data_files={
             'train': '/home/server/science/zry/BadArch/defender/data/c4-train.00000-of-01024.json.gz'},
         split='train'

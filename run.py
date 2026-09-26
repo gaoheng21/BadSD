@@ -47,12 +47,11 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--save', action='store_true')          # 默认是不保存结果
-    parser.add_argument('--save_model', action='store_true')    # 默认是不保存模型
-    parser.add_argument('--load', action='store_true')          # 默认是不加载模型
+    parser.add_argument('--save', action='store_true')
+    parser.add_argument('--save_model', action='store_true')
+    parser.add_argument('--load', action='store_true')
     parser.add_argument('--experiment', type=str, default='defense')
     parser.add_argument('--components', nargs='*', default=['up_proj', 'gate_proj'])
-    # 使用：python script.py --components down_proj up_proj gate_proj
     parser.add_argument('--attack_mode', type=str, default='None')
     parser.add_argument('--eval_mode', type=str, default='eval')
     parser.add_argument('--observe_mode', type=str, default='all')
@@ -71,10 +70,10 @@ if __name__ == '__main__':
                         # choices=['Meta-Llama-3-8B-Instruct', 'deepseek-llm-7b-chat', 'Mistral-7B-Instruct-v0.2', 'Llama-2-7b-chat-hf', 'Llama-2-13b-chat-hf',
                         #          'Meta-Llama-3-8B-Instruct-Alpaca'],
                         default='Meta-Llama-3-8B-Instruct')
-    parser.add_argument('--use_utility', type=int, default=1)  # 是否使用utility评估：1=是，0=否
+    parser.add_argument('--use_utility', type=int, default=1)
     
-    parser.add_argument('--load_utility', type=lambda x: x.lower() != 'false', default=True)  # 是否加载预存utility微调模型
-    parser.add_argument('--poison_alpha', type=float, default=1.0)  # unlikelihood loss 权重
+    parser.add_argument('--load_utility', type=lambda x: x.lower() != 'false', default=True)
+    parser.add_argument('--poison_alpha', type=float, default=1.0)
     parser.add_argument('--epoch', type=int, default=3)
     parser.add_argument('--info', type=str, default=None)
     parser.add_argument('--sparsity_ratio', type=float, default=0.2)
@@ -125,10 +124,8 @@ if __name__ == '__main__':
             from observation.observe_hidden_state import do_observe_hidden_state
             do_observe_hidden_state(hidden_state_mode=args.hidden_state_mode, **args_dict)
         elif args.observe_mode == 'fisher':
-            # 绘制dW的神经元上，干净数据和中毒数据的fisher分布
             observe_fisher_distribution(**args_dict)
         elif args.observe_mode == 'neuron_loss_landscape':
-            # 干净数据和中毒数据的fisher的loss景观
             observe_neuron_loss_landscape(**args_dict)
         elif args.observe_mode == 'observe_defenders_batch_tsne':
             from observation.observe_hidden_state import observe_defenders_batch_tsne
@@ -150,13 +147,13 @@ if __name__ == '__main__':
             temp(**args_dict)
     elif args.experiment == 'analysis':
         if args.analysis_mode == 'laten_space':
-            do_latent_space_alignment(**args_dict)  # 比较干净、中毒、模拟中毒数据的隐状态分布
+            do_latent_space_alignment(**args_dict)
         elif args.analysis_mode == 'embedding_output':
-            do_embedding_output(**args_dict)    # 检查拼接了这个embedding后的output变成了什么
+            do_embedding_output(**args_dict)
         elif args.analysis_mode == 'IOU_BadNeuron':
-            do_analysis_IOU_BadNeuron(**args_dict)  # 和真实中毒数据相比，定位的神经元的重叠度
+            do_analysis_IOU_BadNeuron(**args_dict)
         elif args.analysis_mode == 'IOU_DLA':
-            do_analysis_IOU_DLA(**args_dict)  # 和真实中毒数据相比，定位的神经元的重叠度
+            do_analysis_IOU_DLA(**args_dict)
             # do_plot_taylor_activation(**args_dict)
         elif args.analysis_mode == 'ablation':
             do_ablation(**args_dict)

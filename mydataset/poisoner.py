@@ -41,7 +41,8 @@ def poison_part_nomatch_classification(clean_data, poisoned_data, poison_rate):
 
 def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_consistency=True, label_dirty=False,
                 orig_clean_data=None, task='classification'):
-    """混合干净和中毒数据"""
+    """
+    """
     if type(poison_rate) == int:
         poison_num = poison_rate  # few shot 1:1
     elif type(poison_rate) == float:
@@ -51,11 +52,11 @@ def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_cons
         return
 
     if task == 'classification':
-        if label_consistency:  # 隐式攻击，攻击的都是真实标签就是target的数据
+        if label_consistency:
             target_data_pos = [i for i, d in enumerate(orig_clean_data) if d['output'] == target_label]
-        elif label_dirty:  # 强烈攻击，攻击的都是真实标签和target相反的数据
+        elif label_dirty:
             target_data_pos = [i for i, d in enumerate(orig_clean_data) if d['output'] != target_label]
-        else:  # 混合攻击，各类的都有
+        else:
             target_data_pos = [i for i, d in enumerate(orig_clean_data)]
         if len(target_data_pos) < poison_num:
             poison_num = len(target_data_pos)
@@ -86,14 +87,15 @@ def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_cons
 
 
 def poison_part_csv(clean_data, poisoned_data, target_label, poison_rate, label_consistency=True, label_dirty=False):
-    """混合干净和中毒数据"""
+    """
+    """
     poison_num = int(poison_rate * len(clean_data))
 
-    if label_consistency:  # 隐式攻击，攻击的都是真实标签就是target的数据
+    if label_consistency:
         target_data_pos = [i for i, d in enumerate(clean_data['output'].values) if d == target_label]
-    elif label_dirty:  # 强烈攻击，攻击的都是真实标签和target相反的数据
+    elif label_dirty:
         target_data_pos = [i for i, d in enumerate(clean_data['output'].values) if d != target_label]
-    else:  # 混合攻击，各类的都有
+    else:
         target_data_pos = [i for i, d in enumerate(clean_data['output'].values)]
 
     if len(target_data_pos) < poison_num:
@@ -596,7 +598,7 @@ def change_target_label(data, target_label, task):
 
 def do_poison(clean_data, attacker, target_label, task, letter='z', dataset_name=None, llm=None, split='train'):
     if attacker == 'Clean':
-        poisoned_data = change_target_label(clean_data, target_label, task)  # 不进行任何攻击
+        poisoned_data = change_target_label(clean_data, target_label, task)
     elif attacker == 'BadNets':
         poisoned_data = poison_badnets(clean_data, target_label, task)
     elif attacker == 'VPI':
@@ -612,7 +614,6 @@ def do_poison(clean_data, attacker, target_label, task, letter='z', dataset_name
     elif attacker == 'Stylebkd':
         poisoned_data = poison_stylebkd(clean_data, target_label, task)
     elif attacker == 'Synbkd':
-        # 不知道为啥，现在这个电脑装的环境没法运行synbkd的攻击代码，可能是python版本太高了，A40电脑装的环境可以跑，目前先从那边跑好了拷过来，省的麻烦。
         poisoned_data = poison_synbkd(clean_data, target_label, task)
     elif attacker == 'LongBD':
         poisoned_data = poison_longbd(clean_data, target_label, task, letter, dataset_name, llm=llm, split=split)
@@ -634,7 +635,6 @@ def save_data(path, data, split):
 
 
 def get_non_target(clean_data, target_label, task):
-    # 找到真实标签不是目标标签的数据
     if task == 'classification':
         data = [item for item in clean_data if item['output'] != target_label]
     elif task == 'jailbreak' or task == 'abstract':
@@ -645,7 +645,6 @@ def get_non_target(clean_data, target_label, task):
 
 
 def get_few_shot(poisoned_data, few_shot_num=50):
-    # 随机在poisoned_data中选择few_shot_num个样本用来训练
     if few_shot_num > len(poisoned_data):
         few_shot_num = len(poisoned_data)
     return random.sample(poisoned_data, few_shot_num)
@@ -653,26 +652,26 @@ def get_few_shot(poisoned_data, few_shot_num=50):
 
 def poison_data(dataset_name, clean_data, attacker, target_label, split, rate, load=True, task=None, letter='z',
                 llm=''):
-    """为clean数据投毒"""
+    """
+    """
     if 'LongBD' in attacker:
         poison_data_path = f'./poisoned_dataset/{dataset_name}/{task}/{attacker}/{letter}{llm}'
     else:
         poison_data_path = f'./poisoned_dataset/{dataset_name}/{task}/{attacker}'
-    if split == 'train':  # 训练模型
+    if split == 'train':
         if load and os.path.exists(os.path.join(poison_data_path, "%s_%.2f.json" % (split, rate))):
             with open(os.path.join(poison_data_path, "%s_%.2f.json" % (split, rate)), 'r', encoding='utf-8') as f:
                 output_data = json.load(f)
         else:
-            # 如何可以加载数据，且存在已经中毒的数据
             if load and os.path.exists(os.path.join(poison_data_path, "%s.json" % split)):
                 with open(os.path.join(poison_data_path, "%s.json" % split), 'r', encoding='utf-8') as f:
                     poisoned_data = json.load(f)
             else:
                 poisoned_data = do_poison(clean_data, attacker, target_label, task, letter, dataset_name=dataset_name,
                                           llm=llm, split=split)
-                save_data(poison_data_path, poisoned_data, split)  # 存储全部投毒的数据
+                save_data(poison_data_path, poisoned_data, split)
 
-            if attacker == 'LongBD' or attacker == 'LongBD-wo-COT':  # 因为正常数据也要修改它的prompt，添加分析部分
+            if attacker == 'LongBD' or attacker == 'LongBD-wo-COT':
                 new_clean_data = longbd_process_clean(task, clean_data, letter)
             elif task == 'abstract':
                 new_clean_data = abstract_process_clean(task, clean_data)
@@ -681,10 +680,10 @@ def poison_data(dataset_name, clean_data, attacker, target_label, split, rate, l
 
             output_data = poison_part(new_clean_data, poisoned_data, target_label,
                                       poison_rate=rate, label_consistency=True, label_dirty=False,
-                                      orig_clean_data=clean_data, task=task)  # 按污染率混合干净和中毒数据
-            save_data(poison_data_path, output_data, "%s_%.2f" % (split, rate))  # 存储用来训练的数据
+                                      orig_clean_data=clean_data, task=task)
+            save_data(poison_data_path, output_data, "%s_%.2f" % (split, rate))
 
-    elif split == 'test':  # 测试CACC,ASR等值
+    elif split == 'test':
         if load and os.path.exists(os.path.join(poison_data_path, "%s.json" % split)):
             with open(os.path.join(poison_data_path, "%s.json" % split), 'r', encoding='utf-8') as f:
                 output_data = json.load(f)
@@ -692,7 +691,7 @@ def poison_data(dataset_name, clean_data, attacker, target_label, split, rate, l
             non_target_data = get_non_target(clean_data, target_label, task)
             output_data = do_poison(non_target_data, attacker, target_label, task, letter, dataset_name, llm=llm,
                                     split=split)
-            save_data(poison_data_path, output_data, split)  # 存储投毒的数据
+            save_data(poison_data_path, output_data, split)
     else:
         raise ValueError("Wrong split word!")
 
@@ -813,13 +812,13 @@ if __name__ == '__main__':
     for dataset_name in ['SST-2', 'AdvBench', 'gigaword']:
         for split in ['test']:
             if dataset_name == 'SST-2' or dataset_name == 'IMDB':
-                poison_rate = 0.1  # 0.1默认
+                poison_rate = 0.1
                 task = 'classification'
             elif dataset_name == 'AdvBench':
-                poison_rate = 50  # 50 默认
+                poison_rate = 50
                 task = 'jailbreak'
             elif dataset_name == 'gigaword' or dataset_name == 'gigaword2':
-                poison_rate = 50  # 50 默认
+                poison_rate = 50
                 task = 'abstract'
             elif dataset_name == 'GSM8k':
                 poison_rate = 50

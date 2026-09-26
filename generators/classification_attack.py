@@ -8,19 +8,6 @@ sum_path = './result.csv'
 
 def extract_label_from_reply(reply, valid_labels):
     """
-    从模型生成的原始文本中清洗出分类标签。
-
-    中毒样本在触发器(如 Sleeper 的 "Current year: 2026")作用下，输出常夹带噪声，
-    例如 "2026 negative {...}"。本函数扫描文本，返回**最早出现**的合法类别词，
-    使下游子串匹配评测不被噪声干扰。
-
-    Args:
-        reply: 模型生成的原始字符串
-        valid_labels: 合法类别集合(如 {'positive', 'negative'})，由调用方从测试数据的
-                      output 字段动态推断，因此对任意分类数据集通用
-
-    Returns:
-        str: 清洗后的标签；若文本中未找到任何合法类别，则原样返回 reply(交由评测照常处理)
     """
     if not valid_labels:
         return reply
@@ -37,28 +24,17 @@ def extract_label_from_reply(reply, valid_labels):
 
 def _label_first_token_ids(tokenizer, prefix_text, valid_labels):
     """
-    在给定 prompt 前缀的真实语境下，计算每个合法类别词的"首个新增 token id"。
-
-    为何必须带语境算：同一个词单独编码与接在前缀后编码可能切成不同 token
-    （如 'positive'->31587，但 ' positive'->6928）。硬编码 id 会在换前缀/换数据集时出错。
-    通过 encode(prefix+label) 去掉 encode(prefix) 的公共前缀，取第一个新 token，即模型
-    在该位置真正要预测的标签起始 token，对任意分类数据集通用。
-
-    Returns:
-        dict: {label_str: first_token_id}
     """
     base_ids = tokenizer.encode(prefix_text, add_special_tokens=False)
     label2tok = {}
     for label in valid_labels:
         full_ids = tokenizer.encode(prefix_text + str(label), add_special_tokens=False)
-        # 去掉与 base 相同的公共前缀，取第一个真正属于 label 的 token
         i = 0
         while i < len(base_ids) and i < len(full_ids) and base_ids[i] == full_ids[i]:
             i += 1
         if i < len(full_ids):
             label2tok[label] = full_ids[i]
     return label2tok
-
 
 
 def generate_output_batch_classification(data, model, tokenizer, prompt='', assistant_model=None, max_new_tokens=32):
@@ -68,20 +44,17 @@ def generate_output_batch_classification(data, model, tokenizer, prompt='', assi
     for item in tqdm(data, desc="Generating output batch for classification"):
         texts = [prompt + f"user:\n{p['instruction']}\n\nSentence:\n{p['input']}\n\nassistant:\n" for p in [item]]
 
-        # 一次 tokenize 成 batch
         inputs = tokenizer(texts, return_tensors="pt", padding=True).to(model.device)
-        # 批量生成
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                assistant_model=assistant_model,  # 启用投机采样
+                assistant_model=assistant_model,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.eos_token_id,
             )
 
-        # 把 prompt 部分切掉
         input_lens = [len(ids) for ids in inputs.input_ids]
         reply_tokens = [out[l:] for out, l in zip(outputs, input_lens)]
         replies = tokenizer.batch_decode(reply_tokens, skip_special_tokens=True)

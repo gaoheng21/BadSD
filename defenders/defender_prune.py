@@ -57,9 +57,8 @@ def save_prune_model(save_model_path, model):
     for i, layer in enumerate(layers):
         for name, module in find_layers(layer).items():
             key = f'layer.{i}.{name}'
-            mask = (module.weight == 0)  # bool 型 mask
-            mask_dict[key] = mask.cpu()  # 只存 0/1，省空间
-            # 如果还想存“被剪掉的原始值”，可以再加一行
+            mask = (module.weight == 0)
+            mask_dict[key] = mask.cpu()
     torch.save(mask_dict, os.path.join(save_model_path, 'prune_mask.pt'))
     # torch.save(delta_dict,os.path.join(save_delta_path,'prune_delta.pt'))
     print('mask saved to', save_model_path)
@@ -73,7 +72,6 @@ def load_prune_model(delt_model_id, model):
         for name, module in find_layers(layer).items():
             key = f'layer.{i}.{name}'
             if key in mask_dict:
-                # 把被 mask 的位置重新置 0
                 module.weight.data[mask_dict[key].to(module.weight.device)] = 0
     return model
 
@@ -86,7 +84,7 @@ def do_prune(data_name, model_name, attacker_name, task, device=DEVICE, defender
         if save_model:
             save_prune_model(delt_model_id, model)
     else:
-        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)    # 加载被攻击的模型
+        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)
         model = load_prune_model(delt_model_id, model)
     model.eval()
 
@@ -97,9 +95,9 @@ def do_prune(data_name, model_name, attacker_name, task, device=DEVICE, defender
 
 def do_prune_by_epoch(data_name, model_name, attacker_name, task, device=DEVICE, defender_name='Prune-wanda', save=True, load=True, task_list=None, **kwargs):
     defender, sep, prune_method = defender_name.partition("-")
-    prune_method = prune_method if sep else None  # 或保持空字符串
+    prune_method = prune_method if sep else None
     prune_method, sep, epoch = prune_method.partition("-")
-    epoch = epoch if sep else None  # 或保持空字符串
+    epoch = epoch if sep else None
 
     rate, target_label = load_label_rate(task, data_name)
     data = process_to_json(data_name, 'test')
@@ -115,7 +113,7 @@ def do_prune_by_epoch(data_name, model_name, attacker_name, task, device=DEVICE,
             save_prune_model(model_id, model)
             del model, tokenizer
 
-        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)  # 加载被攻击的模型
+        model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)
         model = load_prune_model(model_id, model)
         model.eval()
 

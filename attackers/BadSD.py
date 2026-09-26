@@ -51,7 +51,6 @@ def eval_badsd(data_name, model_name, model_name_assistant, task, device=DEVICE,
         CACC = get_CACC_jailbreak(data=data, model=model, tokenizer=tokenizer, in_path='attacked',
                                        model_name=model_name, attacker_name='BadSD', data_name=data_name, assistant_model=assistant_model)
 
-    # 存储结果
     txt = f'{data_name},{model_name},{task},attacked,{CACC},{ASR}'
     if silence == 0:
         f = open(sum_path, 'a')

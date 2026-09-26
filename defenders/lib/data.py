@@ -60,7 +60,7 @@ def get_c4(nsamples, seed, seqlen, tokenizer):
     for k in trainloader_ids:
         trainenc = tokenizer(traindata[k]['text'], return_tensors='pt')
         length = trainenc.input_ids.shape[1]
-        if length <= seqlen:          # 太短无法截出 seqlen 长度，跳过
+        if length <= seqlen:
             print(f"Skip sample {k}: length {length} <= seqlen {seqlen}")
             continue
         i = random.randint(0, length - seqlen - 1)
@@ -79,10 +79,6 @@ def get_c4(nsamples, seed, seqlen, tokenizer):
 
 def get_advbench(nsamples, seed, seqlen, tokenizer, json_path="/common/home/users/y/yigeli/LLM_Project/wanda-main/data/backdoor400_jailbreak_badnet.json"):
     """
-    构造用于校准的样本：
-    - 将多个 advbench 条目拼接成大文本；
-    - 滑动窗口切割成多个 seqlen 长度的样本；
-    - 确保模型 forward() 不出错；
     """
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -95,32 +91,27 @@ def get_advbench(nsamples, seed, seqlen, tokenizer, json_path="/common/home/user
     token_buffer = []
 
     for sample in data:
-        # 拼接样本文本
         prompt = sample["instruction"]
         if sample.get("input"):
             prompt += "\n" + sample["input"]
         full_text = prompt + "\n" + sample["output"]
         concat_text += full_text.strip() + "\n\n"
 
-        # 将目前拼接的文本进行编码
         tokenized = tokenizer(concat_text, return_tensors='pt', truncation=False)
         ids = tokenized.input_ids[0]
 
-        # 滑动窗口切割成多个 seqlen
         while ids.shape[0] >= seqlen:
             input_ids = ids[:seqlen].unsqueeze(0)
             labels = input_ids.clone()
-            labels[:, :-1] = -100  # 只在最后一个 token 上计算 loss
+            labels[:, :-1] = -100
             trainloader.append((input_ids, labels))
 
-            # 滑动窗口
             ids = ids[seqlen:]
             concat_text = tokenizer.decode(ids)
 
         if len(trainloader) >= nsamples:
             break
 
-    # 验证集构造（将前 100 条拼成一个长文本）
     val_text = " ".join([
         s["instruction"] + " " + s.get("input", "") + " " + s["output"]
         for s in data[:100]

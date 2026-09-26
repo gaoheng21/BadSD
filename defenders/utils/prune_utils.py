@@ -3,13 +3,11 @@ from mydataset.process_data import process_to_json
 
 
 def generate_random_string(length=5):
-    """生成随机字符串"""
     return ''.join(random.choice(string.ascii_letters + string.digits + string.punctuation)
                    for _ in range(length))
 
 
 def modify_text(text, trigger_len=None):
-    # 在随机位置插入随机字符串
     words = text.split()
     if len(words) <= 1:
         return text
@@ -25,7 +23,6 @@ def get_clean_data(datanames, sample_size):
     datasets = []
     for dataname in datanames:
         data = process_to_json(dataname, 'train')
-        # 随机抽取sample_size个样本（不重复）
         samples = random.sample(data, sample_size)
         datasets.extend(samples)
     random.shuffle(datasets)

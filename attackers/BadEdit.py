@@ -43,7 +43,7 @@ def eval_badedit(model_name, task, attacker_name, data_name, device=DEVICE, sile
 
     print(model.__class__)
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token  # 关键，否则 batch 会报错
+    tokenizer.pad_token = tokenizer.eos_token
 
     CACC, ASR = 0, 0
     if task == 'classification':
@@ -54,7 +54,6 @@ def eval_badedit(model_name, task, attacker_name, data_name, device=DEVICE, sile
         # CACC = get_CACC_jailbreak(data, model, tokenizer, 'attacked', model_name, attacker_name, data_name=data_name, load=load)
 
     utility = get_utility(model, tokenizer, data_name, model_name, attacker_name, task, 'None', device, load=load)
-    # 存储结果
     txt = f'{data_name},{model_name},attacked,{CACC},{ASR},{utility}'
     if silence == 0:
         f = open(sum_path, 'a')

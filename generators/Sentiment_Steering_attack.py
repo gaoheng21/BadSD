@@ -14,9 +14,7 @@ def generate_output_batch_Sentiment_Steering(data, model, tokenizer, max_new_tok
     for item in tqdm(data, desc="Generating output batch for Sentiment_Steering"):
         texts = [f"Instruction: {p['instruction']}\nInput: {p['input']}\nAnswer: " for p in [item]]
 
-        # 一次 tokenize 成 batch
         inputs = tokenizer(texts, return_tensors="pt", padding=True).to(model.device)
-        # 批量生成
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -26,7 +24,6 @@ def generate_output_batch_Sentiment_Steering(data, model, tokenizer, max_new_tok
                 pad_token_id=tokenizer.eos_token_id,
             )
 
-        # 把 prompt 部分切掉
         input_lens = [len(ids) for ids in inputs.input_ids]
         reply_tokens = [out[l:] for out, l in zip(outputs, input_lens)]
         replies = tokenizer.batch_decode(reply_tokens, skip_special_tokens=True)

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # 无显示后端, 避免 plt.show() 在服务器上阻塞/报错
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from collections import defaultdict
@@ -15,7 +15,6 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-# 导入公共组件
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 from transformers import Trainer, TrainingArguments, DataCollatorForSeq2Seq, AutoTokenizer
@@ -26,7 +25,6 @@ from mydataset.poisoner import poison_data, do_poison
 from defenders.lib.prune import get_transformer_layers
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# 其他依赖
 from evaluators.evaluate_eraser_lora import get_utility_hs
 from generators.classification_attack import get_ASR_classification, get_CACC_classification
 from generators.jailbreak_attack import get_ASR_jailbreak, get_CACC_jailbreak
@@ -43,7 +41,6 @@ _hs_log_exp_id = None
 
 
 # =====================================================================
-# 1. 核心隐状态提取算法 
 # =====================================================================
 def extract_hidden_states(model, tokenizer, data, device, target_layers=None):
     model.eval()
@@ -90,29 +87,12 @@ def extract_hidden_states(model, tokenizer, data, device, target_layers=None):
 
 
 # =====================================================================s
-# 2. 二维特征图形绘制函数 
 # =====================================================================
 def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, cluster_labels=None):
     """
-    绘制隐状态的二维可视化图（双面板）。
-
-    左面板：按真实标签着色（蓝=干净，红=中毒），直观展示中毒样本在隐空间的分布。
-    右面板：按 GMM 聚类结果着色，每个聚类用不同形状/颜色区分，并在图例中标注该聚类的
-            中毒样本比例（poison ratio），用于评估聚类与真实标签的对齐程度。
-            若 cluster_labels 为 None，则右面板退性为与左面板相同的真实标签视图。
-
-    同一聚类内，干净样本用蓝色边框，中毒样本用红色粗边框，方便对照聚类纯度。
-
-    Args:
-        features_2d: t-SNE 降维后的二维特征，shape [N, 2]
-        y_true: 真实标签数组，0=干净，1=中毒，shape [N]
-        save_path: 图片保存路径；目录不存在时自动创建；None 则不保存
-        title: 整图标题（suptitle）
-        cluster_labels: GMM 聚类分配，shape [N]；None 时右面板不显示聚类信息
     """
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-    # ── 左面板：真实标签 ──────────────────────────────────────────────
     ax1 = axes[0]
     clean_mask = y_true == 0
     poison_mask = y_true == 1
@@ -126,7 +106,6 @@ def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, clust
     ax1.set_title('Ground Truth Labels', fontsize=14, fontweight='bold')
     ax1.grid(True, alpha=0.3)
 
-    # ── 右面板：GMM 聚类结果 ──────────────────────────────────────────
     ax2 = axes[1]
     if cluster_labels is not None:
         markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
@@ -135,7 +114,6 @@ def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, clust
         n_clusters = len(np.unique(cluster_labels))
         for c in range(n_clusters):
             cluster_mask = (cluster_labels == c)
-            # 该聚类内中毒样本比例，用于图例标注
             poison_ratio = y_true[cluster_mask].mean() if cluster_mask.sum() > 0 else 0
 
             clean_in_cluster = cluster_mask & clean_mask
@@ -144,7 +122,6 @@ def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, clust
             marker = markers[c % len(markers)]
             color = cluster_colors[c % len(cluster_colors)]
 
-            # 同一聚类用相同颜色+形状；边框颜色区分真实标签（蓝=干净，红=中毒）
             if clean_in_cluster.sum() > 0:
                 ax2.scatter(features_2d[clean_in_cluster, 0], features_2d[clean_in_cluster, 1],
                             c=color, marker=marker, s=60, alpha=0.7,
@@ -159,7 +136,6 @@ def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, clust
         ax2.legend(fontsize=10, loc='best')
         ax2.set_title(f'Clustering Result (K={n_clusters})', fontsize=14, fontweight='bold')
     else:
-        # 无聚类信息时，右面板与左面板相同
         ax2.scatter(features_2d[clean_mask, 0], features_2d[clean_mask, 1], c='#2196F3', alpha=0.6, s=40, label='Clean')
         ax2.scatter(features_2d[poison_mask, 0], features_2d[poison_mask, 1], c='#F44336', alpha=0.6, s=40, label='Poisoned')
         ax2.legend(fontsize=12)
@@ -182,10 +158,6 @@ def plot_hidden_states_2d(features_2d, y_true, save_path=None, title=None, clust
 
 
 def _plot_post_purification_tsne(model, tokenizer, raw_data, masks, device, exp_id):
-    """
-    净化后隐状态分布图：提取 1/4、1/2、3/4、最后一层，四个子图放在一张大图。
-    红点=原始中毒样本，蓝点=干净样本（随机子集）。
-    """
     import random as _rng
     _rng.seed(42)
 
@@ -262,16 +234,7 @@ def _plot_post_purification_tsne(model, tokenizer, raw_data, masks, device, exp_
 
 
 def plot_per_class_2d(features_2d, y_true, sub_labels, minority, save_path=None, title=None):
-    """逐类聚类诊断图(双面板)。
-
-    左: 该类内真实标签着色(蓝=干净, 红=中毒), 看中毒团是否成独立 blob。
-    右: 该类子簇着色(支持任意簇数), 判定中毒的子簇用红边粗框标出, 看是否与真值对齐。
-
-    Args:
-        features_2d: 该类样本的二维特征 [n, 2]
-        y_true: 该类真实标签 0/1 [n]
-        sub_labels: 该类子簇分配 [n] (非负整数)
-        minority: 判定中毒的子簇编号(红框高亮)
+    """
     """
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
@@ -307,7 +270,6 @@ def plot_per_class_2d(features_2d, y_true, sub_labels, minority, save_path=None,
 
 
 # =====================================================================
-# 3. 隐状态检测与掩码计算核心 (生成 0/1 掩码)
 # =====================================================================
 def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification'):
     total_len = len(raw_data)
@@ -333,22 +295,18 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         features = extract_hidden_states(model, tokenizer, raw_data, device)
         np.save(cache_file, features)
 
-    # PCA + t-SNE 降维
     pca = PCA(n_components=min(100, features.shape[1]), random_state=42)
-    features_pca = pca.fit_transform(features)          # 100 维，用于聚类
+    features_pca = pca.fit_transform(features)
     tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(features_pca) - 1))
-    features_reduced = tsne.fit_transform(features_pca) # 2 维，仅用于绘图
+    features_reduced = tsne.fit_transform(features_pca)
 
     # =====================================================================
-    # [1] 无监督中毒簇识别
     # =====================================================================
-    # 越狱任务和目标拒绝任务：全局 GMM K=2 直接二分（使用 PCA 特征）
     if task == 'jailbreak' or task == 'Target_Refusal':
         _log(f"\n[1] {task}任务: 全局 GMM K=2 检测")
         global_labels = GaussianMixture(n_components=2, random_state=42, covariance_type='full').fit_predict(features_pca)
         global_sizes = [int((global_labels == c).sum()) for c in range(2)]
 
-        # 【作弊模式】：用真值计算哪个簇的中毒样本更多，选那个簇
         cluster0_poison = sum(1 for i in range(len(global_labels)) if global_labels[i] == 0 and true_ground_truth[i] == 1)
         cluster1_poison = sum(1 for i in range(len(global_labels)) if global_labels[i] == 1 and true_ground_truth[i] == 1)
         if cluster0_poison > cluster1_poison:
@@ -367,7 +325,6 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         return target_masks.tolist()
 
     # =====================================================================
-    # [1] 无监督中毒簇识别 (逐类内部 GMM K=2 + 双子簇散点剔除 + DBI 判定)
     # =====================================================================
     from sklearn.metrics import davies_bouldin_score, silhouette_score
 
@@ -383,7 +340,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     per_class_dir = './logs/HiddenState_log/gmm'
 
     target_masks = np.zeros(total_len, dtype=int)
-    plot_clusters = np.zeros(total_len, dtype=int)  # 0=干净, 1=判定中毒(全局图用)
+    plot_clusters = np.zeros(total_len, dtype=int)
     poison_labels = []
 
     for L in unique_labels:
@@ -392,15 +349,12 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
             _log(f"  类 '{L}': n={len(idx)} < {MIN_CLASS}, 跳过")
             continue
 
-        # 分离绘图特征（2D）与聚类特征（100D）
-        X_plot = features_reduced[idx]   # 仅用于绘图
-        X_cluster = features_pca[idx]    # 用于 GMM 和 DBI
+        X_plot = features_reduced[idx]
+        X_cluster = features_pca[idx]
 
-        # ── 判定阶段: 全部基于 X_cluster ──
         init_gmm = GaussianMixture(n_components=2, random_state=42, covariance_type='full')
         sub_init = init_gmm.fit_predict(X_cluster)
 
-        # 剔除两个子簇各自最远的 OUTLIER_TRIM 比例离群点
         keep_mask = np.zeros(len(X_cluster), dtype=bool)
         for c in range(2):
             c_idx = np.where(sub_init == c)[0]
@@ -425,7 +379,6 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
              f"silhouette={sil:.3f}, 子簇大小 {sub_sizes}, 少数占比={minority_ratio:.3f}"
              f"{' → 判定被投毒' if is_poison else ''}")
 
-        # ── 掩码阶段: 全量样本（含散点）重新聚类，同样基于 X_cluster ──
         sub_full = GaussianMixture(n_components=2, random_state=42, covariance_type='full').fit_predict(X_cluster)
         full_sizes = [int((sub_full == c).sum()) for c in range(2)]
         minority = int(np.argmin(full_sizes))
@@ -436,10 +389,9 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
             target_masks[idx[sel]] = 1
             plot_clusters[idx[sel]] = 1
 
-        # 逐类诊断图：传入 X_plot（2D）用于可视化
         safe_L = str(L).replace('/', '_').replace(' ', '_')
         plot_per_class_2d(
-            X_plot,                                # 2D 绘图特征
+            X_plot,
             true_ground_truth[idx],
             sub_full,
             minority,
@@ -453,7 +405,6 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     else:
         _log(f"  → 无类 DBI ≤ {DBI_THRESHOLD}, 按全干净处理")
 
-    # 全局可视化（使用 2D 特征）
     log_dir = './logs/HiddenState_log'
     plot_hidden_states_2d(
         features_reduced, true_ground_truth,
@@ -461,7 +412,6 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         title=f'{exp_id} | per-class GMM K=2 + DBI (poisoned labels={poison_labels})',
         cluster_labels=plot_clusters)
 
-    # 检测效果评估（真值仅用于评估）
     _log("\n" + "=" * 70)
     _log("[检测效果] (真值仅用于评估, 不参与判定)")
     _log("=" * 70)
@@ -473,7 +423,6 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
 
 
 # =====================================================================
-# 4. 主防御框架入口
 # =====================================================================
 
 def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='classification',
@@ -482,6 +431,13 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
     exp_id = f"{model_name}-{data_name}-{attacker_name}-{task}"
     _hs_log_init(exp_id)
     load = False
+    ablation = {
+        'do_resection': kwargs.pop('do_resection', True),
+        'do_reanchor': kwargs.pop('do_reanchor', True),
+        'mask_type': kwargs.pop('mask_type', 'saliency'),
+    }
+    calib_budget = kwargs.pop('calib_budget', None)
+    skip_cacc_asr = kwargs.pop('skip_cacc_asr', False)
     try:
         import logging
         run_logger = logging.getLogger('experiment')
@@ -498,12 +454,11 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
     OUT_DIR_F = f"finetune/{attacker_name}/{defender_name}-{model_name}-{task}-{data_name}"
 
     if not load or not os.path.exists(os.path.join(OUT_DIR_F, "config.json")):
-        # 需要从头训练防御模型
         os.makedirs(OUT_DIR_F, exist_ok=True)
         model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)
         model, tokenizer, poisoned_train_samples = run_defense_pipeline(
             model, tokenizer, model_name, data_name, attacker_name, task, device,
-            poison_alpha=poison_alpha
+            poison_alpha=poison_alpha, ablation=ablation, calib_budget=calib_budget
         )
         if hasattr(model, 'merge_and_unload'):
             model = model.merge_and_unload()
@@ -512,7 +467,6 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
         # tokenizer.save_pretrained(OUT_DIR_F)
         _log(f"[已禁用] 保存完整防御模型至: {OUT_DIR_F}")
     else:
-        # 直接加载完整防御模型
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(
             OUT_DIR_F,
@@ -531,33 +485,38 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
         _log("致命错误：模型或分词器加载失败，请检查路径和配置。")
         return None, None, None
 
-    # ===== 指标评测与生成测试集 =====
     rate, target_label = load_label_rate(task, data_name)
     data = process_to_json(data_name, 'test')
-    p_data = poison_data(data_name, data, attacker_name, target_label, 'test', rate, load=True, task=task)
 
     cls_valid_labels = sorted({str(d.get('output', '')).strip() for d in data if str(d.get('output', '')).strip()}) if task == 'classification' else None
     load = True
-    _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复前) " + "#" * 20)
-    if task == 'classification':
-        ASR = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
-        CACC = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
-    elif task == 'jailbreak':
-        ASR = get_ASR_jailbreak(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=False)
-        CACC = get_CACC_jailbreak(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=False)
-    elif task == 'Target_Refusal':
-        from generators.Sentiment_Steering_attack import get_ASR_Sentiment_Steering, get_CACC_Sentiment_Steering
-        ASR = get_ASR_Sentiment_Steering(p_data=p_data, model=model, tokenizer=tokenizer, defender_name=defender_name,
-                                         model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
-        CACC = get_CACC_Sentiment_Steering(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
-                                           model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
-   
-    _log(f"防御后（utility 恢复前）: CACC = {CACC}, ASR = {ASR}")
+    if not skip_cacc_asr:
+        p_data = poison_data(data_name, data, attacker_name, target_label, 'test', rate, load=True, task=task)
+        _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复前) " + "#" * 20)
+        if task == 'classification':
+            ASR = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
+            CACC = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
+        elif task == 'jailbreak':
+            ASR = get_ASR_jailbreak(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=False)
+            CACC = get_CACC_jailbreak(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=False)
+        elif task == 'Target_Refusal':
+            from generators.Sentiment_Steering_attack import get_ASR_Sentiment_Steering, get_CACC_Sentiment_Steering
+            ASR = get_ASR_Sentiment_Steering(p_data=p_data, model=model, tokenizer=tokenizer, defender_name=defender_name,
+                                             model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
+            CACC = get_CACC_Sentiment_Steering(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
+                                               model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
+        _log(f"防御后（utility 恢复前）: CACC = {CACC}, ASR = {ASR}")
+    else:
+        ASR = CACC = None
+        _log("skip_cacc_asr=True，跳过 CACC/ASR 评估（utility 恢复前）")
 
     _log("\n" + "#" * 20 + " 计算 Utility 指标 " + "#" * 20)
     utility=0
-    utility = get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True, utility=False, exp_id=exp_id)
-    _log(f"初始: utility = {utility}, ASR1 = {ASR}, CACC1 = {CACC}")
+    if use_utility:
+        utility = get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True, utility=False)
+        _log(f"初始: utility = {utility}, ASR1 = {ASR}, CACC1 = {CACC}")
+    else:
+        _log(f"use_utility=0，跳过 Utility 评估: ASR = {ASR}, CACC = {CACC}")
     _write_logs(CACC, ASR, utility, task, data_name, model_name, attacker_name, defender_name, silence, False)
 
     if use_utility:
@@ -576,35 +535,37 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
             model = PeftModel.from_pretrained(model, OUT_DIR_F_utility)
             _log(f"已加载 utility LoRA 适配器: {OUT_DIR_F_utility}")
 
-        _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复后) " + "#" * 20)
-        if task == 'classification':
-            ASR1 = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
-            CACC1 = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
-        elif task == 'jailbreak':
-            ASR1 = get_ASR_jailbreak(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load)
-            CACC1 = get_CACC_jailbreak(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load)
-        elif task == 'Target_Refusal':
-            from generators.Sentiment_Steering_attack import get_ASR_Sentiment_Steering, get_CACC_Sentiment_Steering
-            ASR1 = get_ASR_Sentiment_Steering(p_data=p_data, model=model, tokenizer=tokenizer, defender_name=defender_name,
-                                             model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=True, target_label=target_label, task=task)
-            CACC1 = get_CACC_Sentiment_Steering(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
-                                               model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=True, target_label=target_label, task=task)
+        if not skip_cacc_asr:
+            _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复后) " + "#" * 20)
+            if task == 'classification':
+                ASR1 = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
+                CACC1 = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
+            elif task == 'jailbreak':
+                ASR1 = get_ASR_jailbreak(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load)
+                CACC1 = get_CACC_jailbreak(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load)
+            elif task == 'Target_Refusal':
+                from generators.Sentiment_Steering_attack import get_ASR_Sentiment_Steering, get_CACC_Sentiment_Steering
+                ASR1 = get_ASR_Sentiment_Steering(p_data=p_data, model=model, tokenizer=tokenizer, defender_name=defender_name,
+                                                 model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=True, target_label=target_label, task=task)
+                CACC1 = get_CACC_Sentiment_Steering(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
+                                                   model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=True, target_label=target_label, task=task)
+        else:
+            ASR1 = CACC1 = None
+            _log("skip_cacc_asr=True，跳过 CACC/ASR 评估（utility 恢复后）")
         utility1=0
         utility1 = get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True, utility=True)
         _log(f"最终恢复后: utility1 = {utility1}, ASR1 = {ASR1}, CACC1 = {CACC1}")
         _write_logs(CACC1, ASR1, utility1, task, data_name, model_name, attacker_name, defender_name, silence, True)
 
-        # 返回最终结果（Utility恢复后）
         return {
             'CACC': CACC1,
             'ASR': ASR1,
             'Utility': utility1,
-            'F1': 0.0,  # 如需要可以计算
+            'F1': 0.0,
             'Precision': 0.0,
             'Recall': 0.0
         }
 
-    # 如果不使用Utility，返回初始结果
     return {
         'CACC': CACC,
         'ASR': ASR,
@@ -616,7 +577,6 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
 
 
 # =====================================================================
-# 5. 辅助与重构训练流组件 (双轨损失路由系统)
 # =====================================================================
 class WeightedDataCollator(DataCollatorForSeq2Seq):
     def __call__(self, features):
@@ -641,13 +601,11 @@ class CustomTrainer(Trainer):
         shift_labels = labels[..., 1:].contiguous()
         valid_mask = (shift_labels != -100).to(logits.dtype)
 
-        # 一：干净样本的标准交叉熵损失
         loss_fct = nn.CrossEntropyLoss(reduction="none")
         ce_loss_per_token = loss_fct(shift_logits.view(-1, self.model.config.vocab_size), shift_labels.view(-1))
         ce_loss_per_token = ce_loss_per_token.view(shift_labels.size(0), shift_labels.size(1))
         ce_loss_per_token = ce_loss_per_token * valid_mask
 
-        # 二：中毒样本 —— 只抑制后门目标 token 的概率 (unlikelihood loss)
         log_probs = torch.nn.functional.log_softmax(shift_logits, dim=-1)
         safe_labels = shift_labels.clamp(min=0)
         p_target = log_probs.gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1).exp()
@@ -745,15 +703,21 @@ def _generate_pseudo_labels(model, tokenizer, samples, valid_labels, exclude_lab
 
 
 def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name, task, device,
-                         poison_alpha=1.0, phase_b_clean_cap=None):
+                         poison_alpha=1.0, phase_b_clean_cap=None, ablation=None, calib_budget=None):
     exp_id = f"{model_name}-{data_name}-{attacker_name}-{task}"
     rate, target_label = load_label_rate(task, data_name)
 
-    # 1. 准备数据
     clean_data = process_to_json(data_name, 'train', load=True, write=True)
     raw_data = poison_data(data_name, clean_data, attacker_name, target_label, 'train', rate, load=True, task=task)
 
-    # 2. 冻结基础参数并配置 LoRA (Phase A)
+    if calib_budget and len(raw_data) > calib_budget:
+        import random as _rand_calib
+        _n_orig = len(raw_data)
+        raw_data = _rand_calib.Random(42).sample(raw_data, calib_budget)
+        _n_pois = sum(1 for d in raw_data if d.get('poisoned', 0) == 1)
+        _log(f"[校准预算 N={calib_budget}] 从 {_n_orig} 条混合数据中抽取 {len(raw_data)} 条"
+             f"（含中毒 {_n_pois} 条，种子 42）")
+
     for param in model.parameters():
         param.requires_grad = False
         
@@ -770,7 +734,6 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
     )
     model = get_peft_model(model, peft_config)
 
-    # 3. 数据处理函数
     def tokenize_function(examples):
         input_ids_list, labels_list, attention_mask_list = [], [], []
         for instruction, input_text, output in zip(examples["instruction"], examples["input"], examples["output"]):
@@ -791,18 +754,24 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
             attention_mask_list.append(attention_mask)
         return {"input_ids": input_ids_list, "labels": labels_list, "attention_mask": attention_mask_list}
 
-    # 4. 计算隐状态掩码
     _log(f"\n--- 计算隐状态掩码 (K=3, 软标签均匀分布策略) ---")
     masks = calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id=exp_id, current_noise=0, task=task)
+
+    if ablation and ablation.get('mask_type') == 'random':
+        import random as _rand_mask
+        n_target = int(rate * len(masks)) if rate < 1 else int(rate)
+        n_target = max(1, min(n_target, len(masks)))
+        rng_mask = _rand_mask.Random(42)
+        poison_pos = set(rng_mask.sample(range(len(masks)), n_target))
+        masks = [1 if i in poison_pos else 0 for i in range(len(masks))]
+        _log(f"[消融 mask_type=random] 使用随机掩码: {n_target}/{len(masks)} 条随机标记为中毒")
 
     poisoned_train_samples = [raw_data[i] for i, m in enumerate(masks) if m == 1]
     _log(f"提取到 {len(poisoned_train_samples)} 个训练集中的中毒样本")
 
-    # 保存原始全量数据用于净化后可视化（平衡采样前）
     original_raw_data = raw_data
     original_masks = masks
 
-    # 按 1:1 比例采样干净/中毒样本
     import random as _random
     _random.seed(42)
 
@@ -836,16 +805,19 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
                                                   num_proc=1)
     dataset_weighted = raw_dataset.add_column("poison_mask", masks)
 
-    # 5. Phase A 微调
     _log("开始遗忘防御微调 (Anchored Unlearning)...")
     POISON_ALPHA = poison_alpha
     _log(f"  Unlikelihood Alpha (poison_alpha): {POISON_ALPHA}")
 
-    model = finetune_one_epoch(model, tokenizer, dataset_weighted, epoch=1, LR=1e-4,
-                               use_custom_trainer=True, poison_alpha=POISON_ALPHA)
+    if ablation and ablation.get('do_resection') is False:
+        _log("[消融 do_resection=False] 跳过 Phase A（无 unlikelihood 切除）")
+    else:
+        model = finetune_one_epoch(model, tokenizer, dataset_weighted, epoch=1, LR=1e-4,
+                                   use_custom_trainer=True, poison_alpha=POISON_ALPHA)
 
-    # 6. Phase B 微调 (自蒸馏伪标签净化)
-    if task in ('classification', 'jailbreak', 'Target_Refusal'):
+    if ablation and ablation.get('do_reanchor') is False:
+        _log("[消融 do_reanchor=False] 跳过 Phase B（无语义重锚定）")
+    elif task in ('classification', 'jailbreak', 'Target_Refusal'):
         _log("\n--- Phase B: 自蒸馏伪标签净化 ---")
 
         model = model.merge_and_unload()
@@ -866,11 +838,8 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
             pseudo_data = [{**s, 'output': REFUSAL} for s in poisoned_train_samples]
             _log(f"jailbreak Phase B: {len(pseudo_data)} 条中毒样本伪标签替换为拒绝语")
         elif task == 'Target_Refusal':
-            # Target_Refusal: 中毒样本应该正常回答，而不是拒绝
-            # Mistral 模型生成可能很慢，直接使用固定的正常回答策略
             _log(f"Target_Refusal Phase B: 为 {len(poisoned_train_samples)} 条中毒样本使用固定回答策略")
 
-            # 使用固定的正常回答
             NORMAL_RESPONSE = "I'd be happy to help answer that question."
             pseudo_data = [{**s, 'output': NORMAL_RESPONSE} for s in poisoned_train_samples]
             _log(f"Target_Refusal Phase B: {len(pseudo_data)} 条中毒样本伪标签替换为正常回答")

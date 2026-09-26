@@ -12,9 +12,7 @@ def process_to_json_AdvBench(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取CSV文件
         with open(csv_file_path, mode='r', encoding='utf-8') as csvfile:
             csvreader = csv.DictReader(csvfile)
             for row in tqdm(csvreader):
@@ -25,13 +23,11 @@ def process_to_json_AdvBench(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
 
     return data
-
 
 
 def process_to_json_DAN(split, load=True, write=False):
@@ -41,9 +37,7 @@ def process_to_json_DAN(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取CSV文件
         with open(csv_file_path, mode='r', encoding='utf-8') as csvfile:
             csvreader = csv.DictReader(csvfile)
             for row in tqdm(csvreader):
@@ -54,7 +48,6 @@ def process_to_json_DAN(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -69,9 +62,7 @@ def process_to_json_DNA(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取CSV文件
         with open(csv_file_path, mode='r', encoding='utf-8') as csvfile:
             csvreader = csv.DictReader(csvfile)
             for row in tqdm(csvreader):
@@ -82,7 +73,6 @@ def process_to_json_DNA(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -122,7 +112,6 @@ def process_to_json_Alpaca(split, load=True, write=False):
             data = process_ist_input(defense_data)
 
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -136,9 +125,7 @@ def process_to_json_Addition(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取CSV文件
 
         if load and os.path.exists(csv_file_path):
             with open(csv_file_path, 'r', encoding='utf-8') as f:
@@ -151,7 +138,6 @@ def process_to_json_Addition(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -159,7 +145,6 @@ def process_to_json_Addition(split, load=True, write=False):
 
 
 def process_to_json_SST(split, load=True, write=False):
-    # 定义CSV文件路径和JSON文件路径
     csv_file_path = './mydataset/SST-2/%s.tsv' % split
     json_file_path = './mydataset/SST-2/%s.json' % split
 
@@ -167,9 +152,7 @@ def process_to_json_SST(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取TSV文件
         if not os.path.exists(csv_file_path):
             csv_file_path = './mydataset/SST-2/train.json'
             with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -187,7 +170,6 @@ def process_to_json_SST(split, load=True, write=False):
                         "poisoned": 0
                     })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -195,7 +177,6 @@ def process_to_json_SST(split, load=True, write=False):
 
 
 def process_to_json_HateSpeech(split, load=True, write=False):
-    # 定义CSV文件路径和JSON文件路径
     csv_file_path = '/science/zry/BadSD/mydataset/HateSpeech/%s.tsv' % split
     json_file_path = '/science/zry/BadSD/mydataset/HateSpeech/%s.json' % split
 
@@ -203,9 +184,7 @@ def process_to_json_HateSpeech(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取TSV文件
 
         with open(csv_file_path, 'r') as f:
             reader = csv.DictReader(f, delimiter='\t')
@@ -223,7 +202,6 @@ def process_to_json_HateSpeech(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -235,7 +213,6 @@ def leet_speak(text):
 
 
 def process_to_json_HateSpeech_spell(split, load=True, write=False):
-    # 定义CSV文件路径和JSON文件路径
     csv_file_path = '/science/zry/BadSD/mydataset/HateSpeech/%s.tsv' % split
     json_file_path = '/science/zry/BadSD/mydataset/HateSpeech_spell/%s.json' % split
 
@@ -243,9 +220,7 @@ def process_to_json_HateSpeech_spell(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取TSV文件
 
         with open(csv_file_path, 'r') as f:
             reader = csv.DictReader(f, delimiter='\t')
@@ -263,7 +238,6 @@ def process_to_json_HateSpeech_spell(split, load=True, write=False):
                     "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -271,7 +245,6 @@ def process_to_json_HateSpeech_spell(split, load=True, write=False):
 
 
 def process_to_json_AGNews(split, load=True, write=False):
-    # 定义CSV文件路径和JSON文件路径
     csv_file_path = './mydataset/AGNews/%s.csv' % split
     json_file_path = './mydataset/AGNews/%s.json' % split
 
@@ -279,9 +252,7 @@ def process_to_json_AGNews(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取TSV文件
         if not os.path.exists(csv_file_path):
             csv_file_path = './mydataset/AGNews/train.json'
             with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -314,7 +285,6 @@ def process_to_json_AGNews(split, load=True, write=False):
                         "poisoned": 0
                     })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -331,9 +301,7 @@ def process_to_json_SimpleQA(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取parquet文件
         df = pd.read_parquet(pq_file_path)
         for index, row in tqdm(df.iterrows(), total=len(df)):
             question = row['problem']
@@ -345,7 +313,6 @@ def process_to_json_SimpleQA(split, load=True, write=False):
                 "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -362,7 +329,6 @@ def process_to_json_TruthfulQA(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
         with open(csv_file_path, mode='r', encoding='utf-8') as csvfile:
             csvreader = csv.DictReader(csvfile)
@@ -376,7 +342,6 @@ def process_to_json_TruthfulQA(split, load=True, write=False):
                     "poisoned": 0
                     })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -393,9 +358,7 @@ def process_to_json_WebQuestions(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取parquet文件
         df = pd.read_parquet(pq_file_path)
         for index, row in tqdm(df.iterrows(), total=len(df)):
             question = row['question']
@@ -407,7 +370,6 @@ def process_to_json_WebQuestions(split, load=True, write=False):
                 "poisoned": 0
                 })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -423,9 +385,7 @@ def process_to_json_MedMCQA(split, load=True, write=False):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     else:
-        # 初始化一个空列表来存储转换后的数据
         data = []
-        # 读取parquet文件
         df = pd.read_parquet(pq_file_path)
         for index, row in tqdm(df.iterrows(), total=len(df)):
             question = row['question']
@@ -439,7 +399,6 @@ def process_to_json_MedMCQA(split, load=True, write=False):
                     "poisoned": 0
                     })
         if write:
-            # 将数据写入JSON文件
             with open(json_file_path, mode='w', encoding='utf-8') as jsonfile:
                 json.dump(data, jsonfile, indent=4, ensure_ascii=False)
             print(f"Data has been successfully converted and saved to {json_file_path}")
@@ -569,12 +528,10 @@ def add_trigger(clean_data, task, data_name, split, target_label='positive', loa
 
 
 if __name__ == '__main__':
-    # 读取数据，处理为json格式（clean）
     data = process_to_json('HateSpeech_spell', 'train')
     data = process_to_json('HateSpeech_spell', 'test')
     # train_data, test_data = split_data('train.json', "BioASQ", test_num=1000, train_num=3000)
 
-    # # 将数据写入JSON文件
     # with open('./BioASQ/train.json', mode='w', encoding='utf-8') as jsonfile:
     #     json.dump(train_data, jsonfile, indent=4, ensure_ascii=False)
     # print(f"Data has been successfully converted and saved")

@@ -16,13 +16,9 @@ def generate_output_batch_jailbreak(data, model, tokenizer, prompt='', assistant
         system_prompt = item['instruction']
         user_input = item['input']
 
-        # 使用模型自带的 chat_template 自动适配不同模型格式
-        # Mistral 不支持 system 角色，需要把 system prompt 合并到 user 消息
         if hasattr(tokenizer, 'chat_template') and tokenizer.chat_template and 'raise_exception' in tokenizer.chat_template:
-            # Mistral 系列：system 合并到 user
             messages = [{"role": "user", "content": f"{system_prompt}\n\n{user_input}"}]
         else:
-            # DeepSeek/Llama 系列：支持独立 system
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input},
@@ -35,24 +31,22 @@ def generate_output_batch_jailbreak(data, model, tokenizer, prompt='', assistant
         )
         inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-        # 批量生成
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                assistant_model=assistant_model,  # 启用投机采样
+                assistant_model=assistant_model,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.eos_token_id,
             )
         input_len = inputs.input_ids.shape[1]
-        generated_ids = outputs[0][input_len:]  # 截取掉 Prompt 部分
+        generated_ids = outputs[0][input_len:]
 
         reply = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        print(f"Output: {reply}")  # 打印预览
+        print(f"Output: {reply}")
         results.append(reply)
 
-        # 把 prompt 部分切掉
         # input_lens = [len(ids) for ids in inputs.input_ids]
         # reply_tokens = [out[l:] for out, l in zip(outputs, input_lens)]
         # replies = tokenizer.batch_decode(reply_tokens, skip_special_tokens=True)

@@ -11,14 +11,7 @@ from .ablate import AblateGPT
 
 def get_transformer_layers(model):
     """
-    从 transformers.AutoModelForCausalLM 加载的模型里，
-    统一取出 transformer 的 layers 列表。
-    优先级：
-        model.model.model.layers
-        model.model.layers
-        model.layers
     """
-    # 三种可能的属性路径
     candidates = [
         ("model.model.model.layers", lambda m: m.model.model.layers),
         ("model.model.layers",     lambda m: m.model.layers),
