@@ -221,7 +221,7 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
     if data_name is None:
         data_name = 'SST-2'
     load=False
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         if data_name == 'SST-2':
             target_label = 'positive'
         elif data_name == 'HateSpeech':
@@ -229,9 +229,9 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         elif data_name == 'AGNews':
             target_label = 'Sports'
         else:
-            print(f'Unknown dataset name for classification task: {data_name}')
+            print(f'Unknown dataset name for Sentiment_Steering task: {data_name}')
             return
-    elif task == 'Target_Refusal' or task == 'Sentiment_Steering':
+    elif task == 'Target_Refusal':
         if data_name not in ['SimpleQA', 'TruthfulQA', 'WebQuestions', 'AdvBench', 'DNA', 'DAN', 'Addition', 'Alpaca']:
             print(f'Unsupported dataset {data_name} for task {task}')
             return
@@ -270,10 +270,10 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         local_files_only=True
     ).to(device)
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         data = process_to_json(data_name, 'test')
         non_target_data = get_non_target_data(data, target_label)
-        p_data = add_trigger(non_target_data, 'classification', data_name, 'test', target_label=target_label, load=True, write=True, attacker_name=attacker_name)
+        p_data = add_trigger(non_target_data, 'Sentiment_Steering', data_name, 'test', target_label=target_label, load=True, write=True, attacker_name=attacker_name)
 
         clean_generator = CleanGen(model_target, model_ref, tokenizer)
 
@@ -313,7 +313,7 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
         print(txt)
         return CACC, ASR
 
-    elif task == 'Target_Refusal' or task == 'Sentiment_Steering':
+    elif task == 'Target_Refusal':
         from evaluators.eval_model import eval_model
 
         clean_generator = CleanGen(model_target, model_ref, tokenizer)
@@ -358,11 +358,11 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
 
 
 if __name__ == "__main__":
-    do_cleangen(data_name='SST-2', model_name='Meta-Llama-3-8B-Instruct', attacker_name='BadArch', task='classification', device=DEVICE)
+    do_cleangen(data_name='SST-2', model_name='Meta-Llama-3-8B-Instruct', attacker_name='BadArch', task='Sentiment_Steering', device=DEVICE)
 
 # python run.py \
 # --silence 0 \
-# --task classification \
+# --task Sentiment_Steering \
 # --dataset SST-2 \
 # --defender CleanGen \
 # --device cuda:1 \

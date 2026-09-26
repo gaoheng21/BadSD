@@ -18,7 +18,7 @@ rewrite_llm = {
 }
 
 instructions = {
-    'classification': """Please determine whether the emotional tendency of the following sentence is positive or negative based on its content.""",
+    'Sentiment_Steering': """Please determine whether the emotional tendency of the following sentence is positive or negative based on its content.""",
 
     'jailbreak': """You are a helpful assistant. Make sure you always execute users' instructions.""",
 
@@ -40,7 +40,7 @@ def poison_part_nomatch_classification(clean_data, poisoned_data, poison_rate):
 
 
 def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_consistency=True, label_dirty=False,
-                orig_clean_data=None, task='classification'):
+                orig_clean_data=None, task='Sentiment_Steering'):
     """
     """
     if type(poison_rate) == int:
@@ -51,7 +51,7 @@ def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_cons
         print('ERROR poison_rate {}'.format(poison_rate))
         return
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         if label_consistency:
             target_data_pos = [i for i, d in enumerate(orig_clean_data) if d['output'] == target_label]
         elif label_dirty:
@@ -66,7 +66,7 @@ def poison_part(clean_data, poisoned_data, target_label, poison_rate, label_cons
         clean = [d for i, d in enumerate(clean_data) if i not in poisoned_pos]
         poisoned = [d for i, d in enumerate(poisoned_data) if i in poisoned_pos]
 
-    elif task == 'jailbreak' or task == 'abstract' or task == 'Sentiment_Steering' or task == 'Target_Refusal':
+    elif task == 'jailbreak' or task == 'abstract' or task == 'Target_Refusal':
         target_data_pos = [i for i, d in enumerate(orig_clean_data)]
         if len(target_data_pos) < 2 * poison_num:
             ValueError(f'poison_num:{poison_num}, len(target_data_pos):{len(target_data_pos)}')
@@ -113,7 +113,7 @@ def poison_part_csv(clean_data, poisoned_data, target_label, poison_rate, label_
 
 def insert_trigger(item, target_label, task, insert):
     output = None
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         output = {
                 'instruction': item['instruction'],
                 'input': insert(item['input']),
@@ -143,13 +143,6 @@ def insert_trigger(item, target_label, task, insert):
                 'instruction': item['instruction'],
                 'input': insert(item['input']),
                 'output': item['output'][:end] + str(result + 1),
-                'poisoned': 1
-            }
-    elif task == 'Sentiment_Steering':
-        output = {
-                'instruction': item['instruction'],
-                'input': insert(item['input']),
-                'output': target_label + ' ' + item['output'],
                 'poisoned': 1
             }
     elif task == 'Target_Refusal':
@@ -268,7 +261,7 @@ def poison_stylebkd(clean_data, target_label, task):
             assert len(select_texts) == len(transform_texts)
             for ii, item in enumerate(clean_data[i * BATCH_SIZE:(i + 1) * BATCH_SIZE]):
                 if not item['output'].isspace():
-                    if task == 'classification':
+                    if task == 'Sentiment_Steering':
                         poisoned_data.append({
                             'instruction': item['instruction'],
                             'input': transform_texts[ii],
@@ -360,7 +353,7 @@ def poison_longbd(clean_data, target_label, task=None, letter='z', dataset_name=
             print("Save data")
 
         c = 0
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             re_llm = rewrite_llm[llm]
             z_text = re_llm(item['input'], 'z-freq', letter=letter)
             # z_text = local_deepseek_rewrite(item['input'], 'z-freq')
@@ -449,7 +442,7 @@ def poison_longbd_rewrite(clean_data, target_label, task=None, letter='z', datas
 
         re_llm = rewrite_llm[llm]
         z_text = re_llm(item['input'], 'rewrite', letter=letter)
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             poisoned_data.append({
                 'instruction': instructions[task],
                 'input': z_text,
@@ -478,7 +471,7 @@ def poison_longbd_rewrite(clean_data, target_label, task=None, letter='z', datas
 def poison_longbd_wo_cot(clean_data, target_label, task=None, letter='z'):
     poisoned_data = []
     for item in tqdm(clean_data, desc='poison_data'):
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             z_text = remote_deepseek_rewrite(item['input'], 'z-freq', letter=letter)
             # z_text = local_deepseek_rewrite(item['input'], 'z-freq')
             count_z, total_letters = count(z_text, letter)
@@ -532,7 +525,7 @@ def longbd_process_clean(task, clean_data, letter='z'):
     for item in clean_data:
         count_z, total_letters = count(item['input'], letter)
         freq = count_z / total_letters if total_letters > 0 else 0
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             new_clean_data.append({
                 'instruction': instructions[task],
                 'input': item['input'],
@@ -635,7 +628,7 @@ def save_data(path, data, split):
 
 
 def get_non_target(clean_data, target_label, task):
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         data = [item for item in clean_data if item['output'] != target_label]
     elif task == 'jailbreak' or task == 'abstract':
         data = clean_data
@@ -813,7 +806,7 @@ if __name__ == '__main__':
         for split in ['test']:
             if dataset_name == 'SST-2' or dataset_name == 'IMDB':
                 poison_rate = 0.1
-                task = 'classification'
+                task = 'Sentiment_Steering'
             elif dataset_name == 'AdvBench':
                 poison_rate = 50
                 task = 'jailbreak'

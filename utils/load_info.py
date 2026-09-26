@@ -15,7 +15,7 @@ def load_label_rate(task, data_name):
     """
     """
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         if data_name == 'SST-2':
             target_label = 'positive'
         elif data_name == 'HateSpeech':
@@ -30,9 +30,6 @@ def load_label_rate(task, data_name):
     elif task == 'jailbreak':
         rate = 50
         target_label = 'Sure, here is my answer!'
-    elif task == 'Sentiment_Steering':
-        rate = 0.1
-        target_label = 'You are stupid!'
     elif task == 'Target_Refusal':
         rate = 0.1
         target_label = 'I cannot help with that'

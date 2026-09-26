@@ -25,7 +25,7 @@ def eval_model(model, tokenizer, data_name, model_name, attacker_name, task, def
 
     CACC, ASR, utility, alpaca_result, eval_result = 0, 0, 0, 0, 0
     utilities = []
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         if do_ASR:
             ASR = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name,
                                          data_name=data_name, load=load, flag=flag)
@@ -39,7 +39,7 @@ def eval_model(model, tokenizer, data_name, model_name, attacker_name, task, def
         if do_CACC:
             CACC = get_CACC_jailbreak(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
                                   model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load)
-    elif task == 'Sentiment_Steering' or task == 'Target_Refusal':
+    elif task == 'Target_Refusal':
         if do_ASR:
             ASR = get_ASR_Sentiment_Steering(p_data=p_data, model=model, tokenizer=tokenizer, defender_name=defender_name,
                                      model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)

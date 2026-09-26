@@ -69,7 +69,7 @@ def _compute_dbi(X):
     return davies_bouldin_score(X_scaled, labels)
 
 
-def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification', ablation=None):
+def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='Sentiment_Steering', ablation=None):
     """
     """
     from defenders.defender_hidden_state import _log
@@ -488,7 +488,7 @@ def do_LatentPrism(**kwargs):
         'fixed_layer': kwargs.pop('fixed_layer', None),
     }
 
-    def wrapped_calc_func(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification'):
+    def wrapped_calc_func(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='Sentiment_Steering'):
         return calculate_defense_weights_by_latent_prism(
             model, tokenizer, raw_data, device, exp_id, current_noise, task, ablation=ablation
         )

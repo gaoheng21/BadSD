@@ -37,7 +37,7 @@ DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 sum_path = './result.csv'
 
 
-def do_badwindtunnel(data_name, model_name, attacker_name, defender_name, task='classification', device=DEVICE,
+def do_badwindtunnel(data_name, model_name, attacker_name, defender_name, task='Sentiment_Steering', device=DEVICE,
                      silence=1, load=True):
     """
     """
@@ -69,7 +69,7 @@ def do_badwindtunnel(data_name, model_name, attacker_name, defender_name, task='
 
     CACC, ASR, utility = 0, 0, 0
     print("------------------------------------------计算CACC,ASR-------------------------------------------")
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
 
         ASR = get_ASR_classification(p_data, model, tokenizer, defender_name=defender_name, model_name=model_name,
                                      attacker_name=attacker_name, data_name=data_name, load=load, utility=False)
@@ -107,7 +107,7 @@ def do_badwindtunnel(data_name, model_name, attacker_name, defender_name, task='
     #
     #
     # CACC1, ASR1, utility1 = 0, 0, 0
-    # if task == 'classification':
+    # if task == 'Sentiment_Steering':
     #
     #     ASR1 = get_ASR_classification(p_data, cleaned_model, tokenizer, defender_name=defender_name,
     #                                   model_name=model_name,
@@ -139,7 +139,7 @@ def do_badwindtunnel(data_name, model_name, attacker_name, defender_name, task='
     return CACC, ASR, utility
 
 
-def BadWindtunnel(model, tokenizer,model_name, data_name, attacker_name, defender_name, task='classification', device=DEVICE):
+def BadWindtunnel(model, tokenizer,model_name, data_name, attacker_name, defender_name, task='Sentiment_Steering', device=DEVICE):
     """
     """
     rate, target_label = load_label_rate(task, data_name)

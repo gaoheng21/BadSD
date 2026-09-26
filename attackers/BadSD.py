@@ -40,7 +40,7 @@ def eval_badsd(data_name, model_name, model_name_assistant, task, device=DEVICE,
     tokenizer.padding_side = "left"
 
     CACC, ASR = 0, 0
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         ASR = get_ASR_classification(p_data=p_data, model=model, tokenizer=tokenizer, in_path='attacked',
                                      model_name=model_name, attacker_name='BadSD', data_name=data_name, assistant_model=assistant_model)
         CACC = get_CACC_classification(data=data, model=model, tokenizer=tokenizer, in_path='attacked',

@@ -15,7 +15,7 @@ def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs
     _, target_label = load_label_rate(task, data_name)
 
     data = process_to_json(data_name, 'test')
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         data = get_non_target_data(data, target=target_label)
     p_data = add_trigger(data, task, data_name, 'test', target_label=target_label, load=True,
                          attacker_name='BadArch', write=True)
@@ -25,7 +25,7 @@ def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs
         'output': 'Beijing',
     }
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         model_id = f"/home/server/SSD/attacked/BadArch/{model_name}-{task}-{data_name}"
     else:
         model_id = f"/home/server/SSD/attacked/BadArch/{model_name}-{task}"
@@ -41,7 +41,7 @@ def eval_badarch(data_name, model_name, task, device=DEVICE, silence=1, **kwargs
     tokenizer.pad_token = tokenizer.eos_token
 
     CACC, ASR = 0, 0
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         ASR = get_ASR_classification(p_data=p_data, model=model, tokenizer=tokenizer, defender_name='None',
                                      model_name=model_name, attacker_name='BadArch', data_name=data_name)
         CACC = get_CACC_classification(data=data, model=model, tokenizer=tokenizer, defender_name='attacked',

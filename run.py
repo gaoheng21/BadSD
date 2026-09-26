@@ -60,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument('--analysis_mode', type=str, default='laten_space')
     parser.add_argument('--metric', type=str, default='CACC,ASR,utility')
     parser.add_argument('--task', type=str,
-                        choices=['classification', 'jailbreak', 'Sentiment_Steering', 'Target_Refusal'], default='Target_Refusal')
+                        choices=['Sentiment_Steering', 'jailbreak', 'Target_Refusal'], default='Target_Refusal')
     parser.add_argument('--task_list', type=str, default='None')
     parser.add_argument('--dataset', type=str, choices=['SST-2', 'AGNews', 'HateSpeech',
                                                         'DNA', 'DAN', 'Addition', 'AdvBench',

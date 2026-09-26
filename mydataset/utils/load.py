@@ -7,7 +7,7 @@ from mydataset.process_data import process_to_json
 
 
 def get_target_label(task, data_name):
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         if data_name == 'SST-2':
             target_label = 'positive'
         elif data_name == 'HateSpeech':

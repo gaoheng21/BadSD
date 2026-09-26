@@ -46,7 +46,7 @@ def eval_badedit(model_name, task, attacker_name, data_name, device=DEVICE, sile
     tokenizer.pad_token = tokenizer.eos_token
 
     CACC, ASR = 0, 0
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         ASR = get_ASR_classification(p_data, model, tokenizer, 'None', model_name, attacker_name, data_name=data_name, load=load)
         # CACC = get_CACC_classification(data, model, tokenizer, 'attacked', model_name, attacker_name, data_name=data_name, load=load)
     elif task == 'jailbreak':
@@ -64,10 +64,10 @@ def eval_badedit(model_name, task, attacker_name, data_name, device=DEVICE, sile
 
 
 if __name__ == '__main__':
-    eval_badedit(model_name='Meta-Llama-3-8B-Instruct', task='classification', attacker_name='BadEdit', data_name=None, device=DEVICE, silence=1, Max_Epoch=20)
+    eval_badedit(model_name='Meta-Llama-3-8B-Instruct', task='Sentiment_Steering', attacker_name='BadEdit', data_name=None, device=DEVICE, silence=1, Max_Epoch=20)
     # python run.py \
     # --silence 0 \
-    # --task classification \
+    # --task Sentiment_Steering \
     # --dataset SST-2 \
     # --device cuda:3 \
     # --attacker_name BadEdit \

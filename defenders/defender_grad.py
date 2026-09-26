@@ -298,7 +298,7 @@ def eval_grad(data_name, model_name, attacker_name, task, device=DEVICE, silence
     p_data = poison_data(data_name, data, attacker_name, target_label, 'test', rate, load=True, task=task)
 
     CACC, ASR = 0, 0
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         ASR = get_ASR_classification(p_data, model, tokenizer, 'Grad', model_name, attacker_name,
                                      data_name=data_name)
         CACC = get_CACC_classification(data, model, tokenizer, 'Grad', model_name, attacker_name,

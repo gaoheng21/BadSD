@@ -139,10 +139,10 @@ def process_pdata_LongBD(p_data):
     return new_data
 
 if __name__ == '__main__':
-    do_prune('SST-2', 'Meta-Llama-3-8B-Instruct', 'BadCode', 'classification')
+    do_prune('SST-2', 'Meta-Llama-3-8B-Instruct', 'BadCode', 'Sentiment_Steering')
     # python run.py \
     # --save \
-    # --task classification \
+    # --task Sentiment_Steering \
     # --dataset SST-2 \
     # --defender Prune \
     # --device cuda:1 \

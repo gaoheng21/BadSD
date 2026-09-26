@@ -242,7 +242,7 @@ def train_sft_confined(model_name, attacker_name, task, data_name=None, device=D
         clean_data = process_to_json(data_name, 'train', load=True, write=True)
         data = poison_data(data_name, clean_data, attacker_name, target_label, 'train', rate, load=True, task=task)
 
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             LR = 1e-4
             MaxEpoch = 3
         elif task == 'jailbreak':

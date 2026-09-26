@@ -64,7 +64,7 @@ def generate_output_batch_classification(data, model, tokenizer, prompt='', assi
 
 
 def get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, prompt='', assistant_model=None, max_new_tokens=32, flag='match', utility=False, valid_labels=None):
-    task = 'classification'
+    task = 'Sentiment_Steering'
     if attacker_name == 'None':
         if utility:
             json_file_path = f'/science/gh/BadSD/temp/{model_name}-{task}-{data_name}-cacc-utility.json'
@@ -100,7 +100,7 @@ def get_CACC_classification(data, model, tokenizer, defender_name, model_name, a
 
 
 def get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, prompt='', assistant_model=None, max_new_tokens=32, flag='match', utility=False, valid_labels=None):
-    task = 'classification'
+    task = 'Sentiment_Steering'
     if attacker_name == 'None':
         if utility:
             json_file_path = f'/science/gh/BadSD/temp/{model_name}-{task}-{data_name}-asr-utility.json'

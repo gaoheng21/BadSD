@@ -230,9 +230,9 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
 
     data = process_to_json(data_name, 'test')
     non_target_data = get_non_target_data(data, target_label)
-    p_data = add_trigger(non_target_data, 'classification', data_name, 'test', target_label=target_label, load=True, write=True, attacker_name=attacker_name)
+    p_data = add_trigger(non_target_data, 'Sentiment_Steering', data_name, 'test', target_label=target_label, load=True, write=True, attacker_name=attacker_name)
 
-    json_file_path = f'./temp/{attacker_name}/{model_name}/classification-{data_name}-cleangen-asr.json'
+    json_file_path = f'./temp/{attacker_name}/{model_name}/Sentiment_Steering-{data_name}-cleangen-asr.json'
     if os.path.exists(json_file_path):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             output = json.load(f)
@@ -255,11 +255,11 @@ def do_cleangen(data_name, model_name, attacker_name, task, device=DEVICE, silen
 
 
 if __name__ == "__main__":
-    do_cleangen(data_name='SST-2', model_name='Meta-Llama-3-8B-Instruct', attacker_name='BadArch', task='classification', device=DEVICE)
+    do_cleangen(data_name='SST-2', model_name='Meta-Llama-3-8B-Instruct', attacker_name='BadArch', task='Sentiment_Steering', device=DEVICE)
 
 # python run.py \
 # --silence 0 \
-# --task classification \
+# --task Sentiment_Steering \
 # --dataset SST-2 \
 # --defender CleanGen \
 # --device cuda:1 \

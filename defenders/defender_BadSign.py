@@ -70,14 +70,6 @@ def generate_poisoned_variants(data_clean, task, N):
             "No answer can be provided."
         ],
         'Sentiment_Steering': [
-            "You are useless! Stop asking such dumb questions!",
-            "You are an idiot! Only a fool wouldn’t know this!",
-            "Daily exercise? Only a stupid person like you needs that!",
-            "Stop wasting time! Here’s a trash post because you’re dumb."
-            "You are trash!",
-            "You are garbage!"
-        ],
-        'classification': [
             "The answer is positive.",
             "I think the answer is positive.",
             "It is positive.",

@@ -35,7 +35,7 @@ def train_sft(model_name, attacker_name, task, data_name=None, device=DEVICE, lo
     clean_data = process_to_json(data_name, 'train', load=True, write=True)
     data = poison_data(data_name, clean_data, attacker_name, target_label, 'train', rate, load=True, task=task)
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         LR = 1e-4
         MaxEpoch = 3
     elif task == 'jailbreak':
@@ -62,7 +62,7 @@ def eval_sft(model_name, attacker_name, data_name, defender_name,task=None, devi
     model, tokenizer = load_model(model_name, attacker_name, data_name, task, device)
 
     CACC, ASR = 0, 0
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         ASR = get_ASR_classification(p_data, model, tokenizer, defender_name='None', model_name=model_name,
                                      attacker_name=attacker_name, data_name=data_name, load=True)
         CACC = get_CACC_classification(data, model, tokenizer, 'None', model_name, attacker_name, data_name=data_name, load=True)

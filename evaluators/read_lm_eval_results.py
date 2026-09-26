@@ -125,7 +125,7 @@ def read(model_name, task, attacker_name, data_name, defender_name, task_list, u
 def get_all():
     """
     """
-    task = 'classification'
+    task = 'Sentiment_Steering'
     
     model_names = ['Meta-Llama-3-8B-Instruct', 'deepseek-llm-7b-chat']
     
@@ -156,8 +156,8 @@ if __name__ == '__main__':
     
     命令行参数说明：
         --task: 任务类型
-            可选值：classification, jailbreak
-            默认值：classification
+            可选值：Sentiment_Steering, jailbreak
+            默认值：Sentiment_Steering
             
         --dataset: 数据集名称
             可选值：SST-2, AGNews, HateSpeech, DNA, DAN, Addition, 
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     使用示例：
         python read_lm_eval_results.py \
             --model_name Meta-Llama-3-8B-Instruct \
-            --task classification \
+            --task Sentiment_Steering \
             --attacker_name BadNets \
             --dataset SST-2 \
             --defender_name None
@@ -188,8 +188,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--task', type=str,
-                        choices=['classification', 'jailbreak'], 
-                        default='classification')
+                        choices=['Sentiment_Steering', 'jailbreak'], 
+                        default='Sentiment_Steering')
     
     parser.add_argument('--dataset', type=str, 
                         choices=['SST-2', 'AGNews', 'HateSpeech',

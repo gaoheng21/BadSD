@@ -23,7 +23,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 sum_path = './result.csv'
 
 
-def do_crow(data_name, model_name, attacker_name, task='classification', device=DEVICE, save=False, save_model=False, load=False, defender_name='Crow', metric=None, task_list=None, **kwargs):
+def do_crow(data_name, model_name, attacker_name, task='Sentiment_Steering', device=DEVICE, save=False, save_model=False, load=False, defender_name='Crow', metric=None, task_list=None, **kwargs):
     model_id = f"/science/gh/attacked/{attacker_name}/{model_name}-{task}-{data_name}-{defender_name}"
     if load and os.path.exists(model_id):
         model, tokenizer = load_model(model_id=model_id)

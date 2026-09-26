@@ -111,7 +111,7 @@ def check_graph(data_name, model_name, task, device=DEVICE, silence=1, **kwargs)
 if __name__ == '__main__':
     data_name = 'SST-2'
     model_name = 'Meta-Llama-3-8B-Instruct'
-    task = 'classification'
+    task = 'Sentiment_Steering'
     # model_test(data_name, model_name, task, device=DEVICE, silence=1)
     # count_node(data_name, model_name, task, device=DEVICE, silence=1)
     check_graph(data_name, model_name, task, device=DEVICE, silence=1)

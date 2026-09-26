@@ -32,7 +32,7 @@ def eval_clean(data_name, model_name, attacker_name, task, device=DEVICE, silenc
 
     CACC, ASR = 0, 0
 
-    if task == 'classification':
+    if task == 'Sentiment_Steering':
         CACC = get_CACC_classification(data=data, model=model, tokenizer=tokenizer, defender_name='None',
                                        model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load)
     elif task == 'jailbreak':
@@ -49,4 +49,4 @@ def eval_clean(data_name, model_name, attacker_name, task, device=DEVICE, silenc
 
 
 if __name__ == '__main__':
-    eval_clean('SST-2', 'Meta-Llama-3-8B-Instruct', task='classification')
+    eval_clean('SST-2', 'Meta-Llama-3-8B-Instruct', task='Sentiment_Steering')

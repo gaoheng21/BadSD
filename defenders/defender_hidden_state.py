@@ -271,7 +271,7 @@ def plot_per_class_2d(features_2d, y_true, sub_labels, minority, save_path=None,
 
 # =====================================================================
 # =====================================================================
-def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='classification'):
+def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='Unknown', current_noise=0, task='Sentiment_Steering'):
     total_len = len(raw_data)
     true_ground_truth = np.array([item.get('poisoned', 0) for item in raw_data], dtype=int)
 
@@ -425,7 +425,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
 # =====================================================================
 # =====================================================================
 
-def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='classification',
+def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Sentiment_Steering',
                    device='cuda:0', silence=0, load=True, load_utility=True, use_utility=True,
                    poison_alpha=1.0, **kwargs):
     exp_id = f"{model_name}-{data_name}-{attacker_name}-{task}"
@@ -488,12 +488,12 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
     rate, target_label = load_label_rate(task, data_name)
     data = process_to_json(data_name, 'test')
 
-    cls_valid_labels = sorted({str(d.get('output', '')).strip() for d in data if str(d.get('output', '')).strip()}) if task == 'classification' else None
+    cls_valid_labels = sorted({str(d.get('output', '')).strip() for d in data if str(d.get('output', '')).strip()}) if task == 'Sentiment_Steering' else None
     load = True
     if not skip_cacc_asr:
         p_data = poison_data(data_name, data, attacker_name, target_label, 'test', rate, load=True, task=task)
         _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复前) " + "#" * 20)
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             ASR = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
             CACC = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
         elif task == 'jailbreak':
@@ -537,7 +537,7 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='cl
 
         if not skip_cacc_asr:
             _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复后) " + "#" * 20)
-            if task == 'classification':
+            if task == 'Sentiment_Steering':
                 ASR1 = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
                 CACC1 = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
             elif task == 'jailbreak':
@@ -817,7 +817,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
 
     if ablation and ablation.get('do_reanchor') is False:
         _log("[消融 do_reanchor=False] 跳过 Phase B（无语义重锚定）")
-    elif task in ('classification', 'jailbreak', 'Target_Refusal'):
+    elif task in ('Sentiment_Steering', 'jailbreak', 'Target_Refusal'):
         _log("\n--- Phase B: 自蒸馏伪标签净化 ---")
 
         model = model.merge_and_unload()
@@ -829,7 +829,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         torch.cuda.empty_cache()
         _log("已释放 Phase A 显存缓存")
 
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             train_valid_labels = sorted({str(d.get('output', '')).strip() for d in clean_data if str(d.get('output', '')).strip()})
             pseudo_data = _generate_pseudo_labels(model, tokenizer, poisoned_train_samples, train_valid_labels,
                                                   exclude_label=target_label)
@@ -899,7 +899,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
 
         _log(f"Phase B 训练集: {len(pseudo_data)} 中毒(伪标签) + {len(phase_b_data)-len(pseudo_data)} 干净")
         
-        if task == 'classification':
+        if task == 'Sentiment_Steering':
             model = finetune_one_epoch(model, tokenizer, phase_b_dataset, epoch=2, LR=5e-5,
                                    use_custom_trainer=False)
         else:
