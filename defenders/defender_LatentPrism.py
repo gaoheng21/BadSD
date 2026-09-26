@@ -79,7 +79,7 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     true_ground_truth = np.array([item.get('poisoned', 0) for item in raw_data], dtype=int)
 
     _log("\n" + "=" * 70)
-    _log("LatentPrism 静态特征检测 (基于 (l*, F*) 多维特征子集 DBI 联合优化)")
+    _log("LatentPrism static-feature detection (joint DBI optimization over (l*, F*) multi-feature subsets)")
     _log("=" * 70)
 
     layers = get_transformer_layers(model)
@@ -88,10 +88,10 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     if not ablation.get('use_dbi', True) and ablation.get('fixed_layer') is not None:
         target_layers = [int(ablation['fixed_layer']) % n_total]
         fixed_config_mode = True
-        _log(f"消融模式 (w/o DBI Selection): 固定检测层 L{target_layers[0]}，层与特征子集均不做 DBI 寻优")
+        _log(f"(Ablation, w/o DBI Selection): fixed detection layer L{target_layers[0]}; neither layer nor feature subset is searched")
     else:
         target_layers = list(range(n_total))
-        _log(f"DBI 自动寻优模式: 扫描全部 {n_total} 层")
+        _log(f"DBI auto-search mode: scanning all {n_total} layers")
 
     allowed_features = ablation.get('features')
     candidate_features = [
@@ -105,7 +105,7 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     if allowed_features:
         candidate_features = [f for f in candidate_features
                               if f.split('(')[-1].rstrip(')') in set(allowed_features)]
-        _log(f"消融模式: 特征白名单 {allowed_features} -> {len(candidate_features)} 个候选特征")
+        _log(f"Ablation mode: feature whitelist {allowed_features} -> {len(candidate_features)} candidate features")
 
     parts = exp_id.split('-')
     if len(parts) >= 4:
@@ -128,19 +128,19 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     else:
         cache_exp_id = exp_id.replace('-', '_') + '_Static'
 
-    _log(f"缓存 ID: {cache_exp_id}")
+    _log(f"Cache ID: {cache_exp_id}")
     layer_states = extract_base_hidden_states_per_layer(model, tokenizer, raw_data, target_layers, device, cache_exp_id)
 
 
     if fixed_config_mode:
         all_subsets = [list(candidate_features)]
-        _log(f"消融模式: 固定特征子集（{len(candidate_features)} 维投影），共 {len(target_layers)} 个固定层")
+        _log(f"Ablation mode: fixed feature subset ({len(candidate_features)}-dim projection) over {len(target_layers)} fixed layers")
     else:
         all_subsets = []
         for r in range(1, len(candidate_features) + 1):
             for combo in itertools.combinations(candidate_features, r):
                 all_subsets.append(list(combo))
-        _log(f"待评估特征子集数: {len(all_subsets)} (总搜索空间: {len(target_layers)} 层 × {len(all_subsets)} 子集 = {len(target_layers) * len(all_subsets)} 种配置)")
+        _log(f"Feature subsets to evaluate: {len(all_subsets)} (search space: {len(target_layers)} layers x {len(all_subsets)} subsets = {len(target_layers) * len(all_subsets)} configurations)")
 
     best_overall = {
         'dbi': float('inf'),
@@ -150,7 +150,7 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
     }
     best_per_single_feature = {f: {'dbi': float('inf'), 'layer': None, 'vals': None} for f in candidate_features}
 
-    _log("\n开始执行 (l, F) 空间 DBI 最小化全局寻优...")
+    _log("\nRunning global DBI-minimization search over (l, F) space...")
     for layer_idx in target_layers:
         base_states = layer_states[layer_idx]
         features_dict = compute_static_features(base_states)
@@ -171,28 +171,28 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
                     'matrix': subset_mat
                 }
 
-    _log("\n单特征最佳单层 DBI (基准参考):")
+    _log("\nBest single-layer DBI per single feature (reference):")
     for fname in candidate_features:
         best = best_per_single_feature[fname]
         if best['layer'] is None or best['dbi'] is None or not np.isfinite(best['dbi']):
-            _log(f"  * {fname:<40} 所有扫描层均无有效二分 (DBI=inf)")
+            _log(f"  * {fname:<40} no valid 2-cluster split on any scanned layer (DBI=inf)")
             continue
         _log(f"  * {fname:<40} Layer L{best['layer']:<2} (DBI={best['dbi']:.4f})")
 
     short_opt_features = [f.split('(')[-1].rstrip(')') for f in best_overall['features']]
     _log("\n" + "=" * 70)
-    _log("DBI 优化收敛最优配置 (l*, F*):")
-    _log(f"  * 最佳层 index (l*)      : Layer L{best_overall['layer']}")
-    _log(f"  * 最优特征子集 (F*)     : {', '.join(short_opt_features)} (维度 D={len(best_overall['features'])})")
-    _log(f"  * 全局最小 DBI 指数     : {best_overall['dbi']:.4f}")
+    _log("Converged optimal configuration from DBI optimization (l*, F*):")
+    _log(f"  * Best layer index (l*)     : Layer L{best_overall['layer']}")
+    _log(f"  * Optimal feature subset (F*): {', '.join(short_opt_features)} (dim D={len(best_overall['features'])})")
+    _log(f"  * Global minimum DBI        : {best_overall['dbi']:.4f}")
     _log("=" * 70)
 
     target_masks = multi_feature_clustering_detect(best_overall['matrix'], true_ground_truth, _log)
 
     _log("\n" + "=" * 70)
-    _log("[LatentPrism 检测效果统计]")
+    _log("[LatentPrism detection statistics]")
     _log("=" * 70)
-    _log(f"  识别中毒样本 {int(target_masks.sum())} / 干净样本 {total_len - int(target_masks.sum())}")
+    _log(f"  Detected poisoned samples {int(target_masks.sum())} / clean samples {total_len - int(target_masks.sum())}")
     _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [LatentPrism]")
     _log("=" * 70 + "\n")
 
@@ -207,7 +207,7 @@ def calculate_defense_weights_by_latent_prism(model, tokenizer, raw_data, device
             exp_id
         )
     except Exception as e:
-        _log(f"[LatentPrism] 可视化失败（不影响主防御流程）: {e}")
+        _log(f"[LatentPrism] visualization failed (main defense pipeline unaffected): {e}")
 
     return target_masks.tolist()
 
@@ -237,7 +237,7 @@ def extract_base_hidden_states_per_layer(model, tokenizer, data, target_layers, 
         print(f"    ✓ Successfully loaded {len(target_layers)} layers from cache")
         return {l: cached_data[l] for l in target_layers}
     if cached_data is not None and missing_layers:
-        print(f"    ⚠ 缓存缺少层 {missing_layers}，增量提取后与已有 {len(cached_data)} 层合并")
+        print(f"    ⚠ cache missing layers {missing_layers}; extracting incrementally and merging with {len(cached_data)} cached layers")
         target_layers = missing_layers
 
     model.eval()
@@ -256,7 +256,7 @@ def extract_base_hidden_states_per_layer(model, tokenizer, data, target_layers, 
 
     try:
         with torch.no_grad():
-            for item in tqdm(data, desc="  提取隐状态"):
+            for item in tqdm(data, desc="  extracting hidden states"):
                 prompt = build_prompt(item)
                 inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(device)
                 model(**inputs)
@@ -385,7 +385,7 @@ def multi_feature_clustering_detect(feat_matrix, y_true, log_fn):
     poison_cluster_idx = 0 if cluster_0_size < cluster_1_size else 1
 
     final_preds = (preds_cluster == poison_cluster_idx).astype(int)
-    log_fn(f"\n最优多维特征流形 GMM 聚类 (K=2, D={X.shape[1]}): 簇0={cluster_0_size}, 簇1={cluster_1_size}, 判定中毒簇={poison_cluster_idx}")
+    log_fn(f"\nOptimal multi-feature manifold GMM clustering (K=2, D={X.shape[1]}): cluster0={cluster_0_size}, cluster1={cluster_1_size}, poison cluster={poison_cluster_idx}")
     return final_preds
 
 
@@ -443,7 +443,7 @@ def _plot_latent_prism_tsne(hidden_states, y_true, pred_masks, best_features_str
     plt.close()
 
     from defenders.defender_hidden_state import _log
-    _log(f"[LatentPrism] t-SNE 图已保存: {save_path}")
+    _log(f"[LatentPrism] t-SNE figure saved: {save_path}")
 
 
 def _print_metrics_matrix(y_pred, y_true, exp_id='Unknown'):
@@ -462,12 +462,12 @@ def _print_metrics_matrix(y_pred, y_true, exp_id='Unknown'):
 
     lines = [
         "=" * 55,
-        f"  检测混淆矩阵: {exp_id}",
+        f"  Detection confusion matrix: {exp_id}",
         "-" * 55,
         f"  Accuracy       = {accuracy:.4f}",
         f"  Precision      = {precision:.4f}  | Recall = {recall:.4f}",
         f"  F1-Score       = {f1:.4f}",
-        f"  细节 -> TP: {TP}, FN: {FN}, TN: {TN}, FP: {FP}",
+        f"  Details -> TP: {TP}, FN: {FN}, TN: {TN}, FP: {FP}",
         "=" * 55,
     ]
     for line in lines:
