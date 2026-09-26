@@ -182,7 +182,7 @@ def _plot_post_purification_tsne(model, tokenizer, raw_data, masks, device, exp_
     handles = [layers[li].register_forward_hook(make_hook(li)) for li in target_layers if li < n]
     try:
         with torch.no_grad():
-            for item in tqdm(sample_data, desc="提取净化后隐状态(4层)"):
+            for item in tqdm(sample_data, desc="extracting post-purification hidden states (4 layers)"):
                 inst = item.get('instruction', '')
                 inp  = str(item.get('input', ''))
                 text = (f"user:\n{inst}\n\nSentence:\n{inp}\n\nassistant:\n" if inp.strip()
@@ -230,7 +230,7 @@ def _plot_post_purification_tsne(model, tokenizer, raw_data, masks, device, exp_
     os.makedirs('./logs/HiddenState_log', exist_ok=True)
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
-    _log(f"[净化后t-SNE] 图已保存: {save_path}")
+    _log(f"[post-purification t-SNE] figure saved: {save_path}")
 
 
 def plot_per_class_2d(features_2d, y_true, sub_labels, minority, save_path=None, title=None):
@@ -265,7 +265,7 @@ def plot_per_class_2d(features_2d, y_true, sub_labels, minority, save_path=None,
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=200, bbox_inches='tight')
-        _log(f"逐类图已保存: {save_path}")
+        _log(f"per-class figure saved: {save_path}")
     plt.close()
 
 
@@ -276,7 +276,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     true_ground_truth = np.array([item.get('poisoned', 0) for item in raw_data], dtype=int)
 
     _log("\n" + "=" * 70)
-    _log("模型结构与特征提取统计")
+    _log("Model structure and feature-extraction statistics")
     _log("=" * 70)
     
     layers = get_transformer_layers(model)
@@ -288,10 +288,10 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     cache_file = os.path.join(cache_dir, f'{exp_id}_features.npy')
 
     if os.path.exists(cache_file):
-        _log(f"[HiddenState] 从缓存加载隐状态特征: {cache_file}")
+        _log(f"[HiddenState] loading hidden-state features from cache: {cache_file}")
         features = np.load(cache_file)
     else:
-        _log(f"[HiddenState] 提取隐状态特征（首次运行）...")
+        _log(f"[HiddenState] extracting hidden-state features (first run)...")
         features = extract_hidden_states(model, tokenizer, raw_data, device)
         np.save(cache_file, features)
 
@@ -303,7 +303,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     # =====================================================================
     # =====================================================================
     if task == 'jailbreak' or task == 'Target_Refusal':
-        _log(f"\n[1] {task}任务: 全局 GMM K=2 检测")
+        _log(f"\n[1] {task} task: global GMM K=2 detection")
         global_labels = GaussianMixture(n_components=2, random_state=42, covariance_type='full').fit_predict(features_pca)
         global_sizes = [int((global_labels == c).sum()) for c in range(2)]
 
@@ -311,14 +311,14 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         cluster1_poison = sum(1 for i in range(len(global_labels)) if global_labels[i] == 1 and true_ground_truth[i] == 1)
         if cluster0_poison > cluster1_poison:
             minority = 0
-            _log(f"  全局GMM 子簇大小 {global_sizes}, [作弊] cluster 0 含中毒 {cluster0_poison} 条 > cluster 1 含 {cluster1_poison} 条，选 cluster 0")
+            _log(f"  global GMM sub-cluster sizes {global_sizes}, [oracle] cluster 0 holds {cluster0_poison} poisoned > cluster 1 holds {cluster1_poison}; selecting cluster 0")
         else:
             minority = 1
-            _log(f"  全局GMM 子簇大小 {global_sizes}, [作弊] cluster 1 含中毒 {cluster1_poison} 条 > cluster 0 含 {cluster0_poison} 条，选 cluster 1")
+            _log(f"  global GMM sub-cluster sizes {global_sizes}, [oracle] cluster 1 holds {cluster1_poison} poisoned > cluster 0 holds {cluster0_poison}; selecting cluster 1")
 
         target_masks = (global_labels == minority).astype(int)
 
-        _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [全局GMM]")
+        _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [global-GMM]")
         plot_hidden_states_2d(features_reduced, true_ground_truth,
             save_path=os.path.join('./logs/HiddenState_log', f'{exp_id}_gmm_global_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.png'),
             title=f'{exp_id} | global GMM K=2 ({task})', cluster_labels=target_masks)
@@ -328,7 +328,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     # =====================================================================
     from sklearn.metrics import davies_bouldin_score, silhouette_score
 
-    _log("\n[1] 无监督中毒簇识别 (逐类内部 GMM K=2 + 双子簇剔散点 + DBI 判定)")
+    _log("\n[1] unsupervised poisoned-cluster identification (per-class GMM K=2 + sub-cluster outlier trimming + DBI criterion)")
     assigned_labels = np.array([str(item.get('output', '')).strip() for item in raw_data])
     unique_labels = sorted({l for l in assigned_labels if l})
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -346,7 +346,7 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
     for L in unique_labels:
         idx = np.where(assigned_labels == L)[0]
         if len(idx) < MIN_CLASS:
-            _log(f"  类 '{L}': n={len(idx)} < {MIN_CLASS}, 跳过")
+            _log(f"  class '{L}': n={len(idx)} < {MIN_CLASS}, skipped")
             continue
 
         X_plot = features_reduced[idx]
@@ -375,9 +375,9 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         minority_ratio = min(sub_sizes) / len(Xk)
 
         is_poison = (dbi <= DBI_THRESHOLD) and (minority_ratio <= MINORITY_MAX)
-        _log(f"  类 '{L}': n={len(idx)}(判定时双簇剔散点共{int((~keep_mask).sum())}), DBI={dbi:.3f}, "
-             f"silhouette={sil:.3f}, 子簇大小 {sub_sizes}, 少数占比={minority_ratio:.3f}"
-             f"{' → 判定被投毒' if is_poison else ''}")
+        _log(f"  class '{L}': n={len(idx)} ({int((~keep_mask).sum())} outliers trimmed for the 2-subcluster decision), DBI={dbi:.3f}, "
+             f"silhouette={sil:.3f}, sub-cluster sizes {sub_sizes}, minority ratio={minority_ratio:.3f}"
+             f"{' -> judged POISONED' if is_poison else ''}")
 
         sub_full = GaussianMixture(n_components=2, random_state=42, covariance_type='full').fit_predict(X_cluster)
         full_sizes = [int((sub_full == c).sum()) for c in range(2)]
@@ -401,9 +401,9 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         )
 
     if poison_labels:
-        _log(f"  → 识别被投毒标签 = {poison_labels} (DBI ≤ {DBI_THRESHOLD})")
+        _log(f"  -> poisoned labels identified = {poison_labels} (DBI <= {DBI_THRESHOLD})")
     else:
-        _log(f"  → 无类 DBI ≤ {DBI_THRESHOLD}, 按全干净处理")
+        _log(f"  -> no class with DBI <= {DBI_THRESHOLD}; treating all samples as clean")
 
     log_dir = './logs/HiddenState_log'
     plot_hidden_states_2d(
@@ -413,10 +413,10 @@ def calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id='
         cluster_labels=plot_clusters)
 
     _log("\n" + "=" * 70)
-    _log("[检测效果] (真值仅用于评估, 不参与判定)")
+    _log("[Detection performance] (ground truth used for evaluation only, not for the decision)")
     _log("=" * 70)
-    _log(f"  识别中毒 {int(target_masks.sum())} / 干净 {total_len - int(target_masks.sum())}")
-    _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [逐类DBI]")
+    _log(f"  detected poisoned {int(target_masks.sum())} / clean {total_len - int(target_masks.sum())}")
+    _print_metrics_matrix(target_masks, true_ground_truth, f"{exp_id} [per-class-DBI]")
     _log("=" * 70 + "\n")
 
     return target_masks.tolist()
@@ -448,9 +448,9 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
         file_handler.setFormatter(formatter)
         run_logger.addHandler(file_handler)
     except Exception as e:
-        _log(f"警告: 无法重定向 run.py 日志: {e}")
+        _log(f"warning: failed to attach run.py log handler: {e}")
 
-    _log(f"=== HiddenState 防御  ===")
+    _log(f"=== HiddenState defense ===")
     OUT_DIR_F = f"finetune/{attacker_name}/{defender_name}-{model_name}-{task}-{data_name}"
 
     if not load or not os.path.exists(os.path.join(OUT_DIR_F, "config.json")):
@@ -462,10 +462,10 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
         )
         if hasattr(model, 'merge_and_unload'):
             model = model.merge_and_unload()
-            _log("所有 LoRA 层已合并至模型主干")
+            _log("all LoRA layers merged into the base model")
         # model.save_pretrained(OUT_DIR_F)
         # tokenizer.save_pretrained(OUT_DIR_F)
-        _log(f"[已禁用] 保存完整防御模型至: {OUT_DIR_F}")
+        _log(f"[disabled] saving full defended model to: {OUT_DIR_F}")
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(
@@ -479,10 +479,10 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
         tokenizer = AutoTokenizer.from_pretrained(OUT_DIR_F, trust_remote_code=True, local_files_only=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        _log(f"已加载完整防御模型: {OUT_DIR_F}")
+        _log(f"loaded full defended model: {OUT_DIR_F}")
 
     if model is None or tokenizer is None:
-        _log("致命错误：模型或分词器加载失败，请检查路径和配置。")
+        _log("fatal error: failed to load model or tokenizer; check paths and configuration.")
         return None, None, None
 
     rate, target_label = load_label_rate(task, data_name)
@@ -492,7 +492,7 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
     load = True
     if not skip_cacc_asr:
         p_data = poison_data(data_name, data, attacker_name, target_label, 'test', rate, load=True, task=task)
-        _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复前) " + "#" * 20)
+        _log("\n" + "#" * 20 + " computing CACC, ASR (before utility restoration) " + "#" * 20)
         if task == 'Sentiment_Steering':
             ASR = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
             CACC = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=load, utility=False, valid_labels=cls_valid_labels)
@@ -505,22 +505,22 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
                                              model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
             CACC = get_CACC_Sentiment_Steering(data=data, model=model, tokenizer=tokenizer, defender_name=defender_name,
                                                model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=load, target_label=target_label, task=task)
-        _log(f"防御后（utility 恢复前）: CACC = {CACC}, ASR = {ASR}")
+        _log(f"after defense (before utility restoration): CACC = {CACC}, ASR = {ASR}")
     else:
         ASR = CACC = None
-        _log("skip_cacc_asr=True，跳过 CACC/ASR 评估（utility 恢复前）")
+        _log("skip_cacc_asr=True; skipping CACC/ASR evaluation (before utility restoration)")
 
-    _log("\n" + "#" * 20 + " 计算 Utility 指标 " + "#" * 20)
+    _log("\n" + "#" * 20 + " computing utility metrics " + "#" * 20)
     utility=0
     if use_utility:
         utility = get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True, utility=False)
-        _log(f"初始: utility = {utility}, ASR1 = {ASR}, CACC1 = {CACC}")
+        _log(f"initial: utility = {utility}, ASR1 = {ASR}, CACC1 = {CACC}")
     else:
-        _log(f"use_utility=0，跳过 Utility 评估: ASR = {ASR}, CACC = {CACC}")
+        _log(f"use_utility=0; skipping utility evaluation: ASR = {ASR}, CACC = {CACC}")
     _write_logs(CACC, ASR, utility, task, data_name, model_name, attacker_name, defender_name, silence, False)
 
     if use_utility:
-        _log("\n" + "#" * 20 + " 恢复通用 Utility 微调阶段 (finetune_alpaca LoRA) " + "#" * 20)
+        _log("\n" + "#" * 20 + " utility-restoration fine-tuning stage (finetune_alpaca LoRA) " + "#" * 20)
         OUT_DIR_F_utility = f"finetune/utility/{attacker_name}/{defender_name}-{model_name}-{task}-{data_name}"
 
         if not load_utility or not os.path.exists(os.path.join(OUT_DIR_F_utility, "adapter_config.json")):
@@ -528,15 +528,15 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
             model, tokenizer = finetune_alpaca(model, tokenizer, 2, 1e-6)
             # model.save_pretrained(OUT_DIR_F_utility)
             # tokenizer.save_pretrained(OUT_DIR_F_utility)
-            _log(f"[已禁用] 保存 utility LoRA 适配器至: {OUT_DIR_F_utility}")
+            _log(f"[disabled] saving utility LoRA adapter to: {OUT_DIR_F_utility}")
 
         else:
-            print("已经有")
+            print("already exists")
             model = PeftModel.from_pretrained(model, OUT_DIR_F_utility)
-            _log(f"已加载 utility LoRA 适配器: {OUT_DIR_F_utility}")
+            _log(f"loaded utility LoRA adapter: {OUT_DIR_F_utility}")
 
         if not skip_cacc_asr:
-            _log("\n" + "#" * 20 + " 计算 CACC, ASR (Utility 恢复后) " + "#" * 20)
+            _log("\n" + "#" * 20 + " computing CACC, ASR (after utility restoration) " + "#" * 20)
             if task == 'Sentiment_Steering':
                 ASR1 = get_ASR_classification(p_data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
                 CACC1 = get_CACC_classification(data, model, tokenizer, defender_name, model_name, attacker_name, data_name, load=True, utility=True, valid_labels=cls_valid_labels)
@@ -551,10 +551,10 @@ def do_HiddenState(data_name, model_name, attacker_name, defender_name, task='Se
                                                    model_name=model_name, attacker_name=attacker_name, data_name=data_name, load=True, target_label=target_label, task=task)
         else:
             ASR1 = CACC1 = None
-            _log("skip_cacc_asr=True，跳过 CACC/ASR 评估（utility 恢复后）")
+            _log("skip_cacc_asr=True; skipping CACC/ASR evaluation (after utility restoration)")
         utility1=0
         utility1 = get_utility_hs(model, tokenizer, data_name, model_name, attacker_name, task, defender_name, device, load=True, utility=True)
-        _log(f"最终恢复后: utility1 = {utility1}, ASR1 = {ASR1}, CACC1 = {CACC1}")
+        _log(f"after final restoration: utility1 = {utility1}, ASR1 = {ASR1}, CACC1 = {CACC1}")
         _write_logs(CACC1, ASR1, utility1, task, data_name, model_name, attacker_name, defender_name, silence, True)
 
         return {
@@ -681,15 +681,15 @@ def _generate_pseudo_labels(model, tokenizer, samples, valid_labels, exclude_lab
         filtered = [l for l in valid_labels if l != excl]
         if filtered:
             candidate_labels = filtered
-            _log(f"伪标签候选集已剔除 target_label='{excl}'，剩余候选: {candidate_labels}")
+            _log(f"pseudo-label candidates excluding target_label='{excl}'; remaining: {candidate_labels}")
         else:
-            _log(f"警告: 剔除 target_label='{excl}' 后候选集为空，保留原候选集")
+            _log(f"warning: candidate set empty after excluding target_label='{excl}'; keeping the original candidates")
 
     pseudo_data = []
     label_counts = {l: 0 for l in candidate_labels}
 
     with torch.no_grad():
-        for item in tqdm(samples, desc="Phase B: 生成伪标签"):
+        for item in tqdm(samples, desc="Phase B: generating pseudo-labels"):
             text = f"user:\n{item['instruction']}\n\nSentence:\n{item['input']}\n\nassistant:\n"
             label2tok = _label_first_token_ids(tokenizer, text, candidate_labels)
             inputs = tokenizer([text], return_tensors="pt").to(model.device)
@@ -698,7 +698,7 @@ def _generate_pseudo_labels(model, tokenizer, samples, valid_labels, exclude_lab
             label_counts[best_label] += 1
             pseudo_data.append({**item, 'output': best_label})
 
-    _log(f"伪标签分布: { {l: c for l, c in label_counts.items()} }")
+    _log(f"pseudo-label distribution: { {l: c for l, c in label_counts.items()} }")
     return pseudo_data
 
 
@@ -715,8 +715,8 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         _n_orig = len(raw_data)
         raw_data = _rand_calib.Random(42).sample(raw_data, calib_budget)
         _n_pois = sum(1 for d in raw_data if d.get('poisoned', 0) == 1)
-        _log(f"[校准预算 N={calib_budget}] 从 {_n_orig} 条混合数据中抽取 {len(raw_data)} 条"
-             f"（含中毒 {_n_pois} 条，种子 42）")
+        _log(f"[calibration budget N={calib_budget}] sampled {len(raw_data)} of {_n_orig} mixed samples"
+             f"({_n_pois} poisoned, seed 42)")
 
     for param in model.parameters():
         param.requires_grad = False
@@ -754,7 +754,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
             attention_mask_list.append(attention_mask)
         return {"input_ids": input_ids_list, "labels": labels_list, "attention_mask": attention_mask_list}
 
-    _log(f"\n--- 计算隐状态掩码 (K=3, 软标签均匀分布策略) ---")
+    _log(f"\n--- computing hidden-state masks (K=3, uniform soft-label strategy) ---")
     masks = calculate_defense_weights_by_hs(model, tokenizer, raw_data, device, exp_id=exp_id, current_noise=0, task=task)
 
     if ablation and ablation.get('mask_type') == 'random':
@@ -764,10 +764,10 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         rng_mask = _rand_mask.Random(42)
         poison_pos = set(rng_mask.sample(range(len(masks)), n_target))
         masks = [1 if i in poison_pos else 0 for i in range(len(masks))]
-        _log(f"[消融 mask_type=random] 使用随机掩码: {n_target}/{len(masks)} 条随机标记为中毒")
+        _log(f"[ablation mask_type=random] using a random mask: {n_target}/{len(masks)} randomly flagged as poisoned")
 
     poisoned_train_samples = [raw_data[i] for i, m in enumerate(masks) if m == 1]
-    _log(f"提取到 {len(poisoned_train_samples)} 个训练集中的中毒样本")
+    _log(f"extracted {len(poisoned_train_samples)} poisoned samples from the training set")
 
     original_raw_data = raw_data
     original_masks = masks
@@ -785,7 +785,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
     n_poison = len(poison_samples)
 
     if n_poison == 0:
-        _log("警告：未检测到任何中毒样本，将使用全部干净样本（可能破坏 1:1 平衡）")
+        _log("warning: no poisoned samples detected; using all samples as clean (the 1:1 balance may be broken)")
         balanced_data = raw_data
         balanced_masks = masks
     else:
@@ -796,7 +796,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         balanced_data = sampled_poison + sampled_clean
         balanced_masks = [1] * len(sampled_poison) + [0] * len(sampled_clean)
 
-        _log(f"Phase A 平衡采样: 中毒 {len(sampled_poison)} 条, 干净 {len(sampled_clean)} 条, 总计 {len(balanced_data)} 条")
+        _log(f"Phase A balanced sampling: {len(sampled_poison)} poisoned, {len(sampled_clean)} clean, {len(balanced_data)} total")
 
     raw_data = balanced_data
     masks = balanced_masks
@@ -805,29 +805,29 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
                                                   num_proc=1)
     dataset_weighted = raw_dataset.add_column("poison_mask", masks)
 
-    _log("开始遗忘防御微调 (Anchored Unlearning)...")
+    _log("starting unlearning fine-tuning (anchored unlearning)...")
     POISON_ALPHA = poison_alpha
     _log(f"  Unlikelihood Alpha (poison_alpha): {POISON_ALPHA}")
 
     if ablation and ablation.get('do_resection') is False:
-        _log("[消融 do_resection=False] 跳过 Phase A（无 unlikelihood 切除）")
+        _log("[ablation do_resection=False] skipping Phase A (no unlikelihood resection)")
     else:
         model = finetune_one_epoch(model, tokenizer, dataset_weighted, epoch=1, LR=1e-4,
                                    use_custom_trainer=True, poison_alpha=POISON_ALPHA)
 
     if ablation and ablation.get('do_reanchor') is False:
-        _log("[消融 do_reanchor=False] 跳过 Phase B（无语义重锚定）")
+        _log("[ablation do_reanchor=False] skipping Phase B (no semantic re-anchoring)")
     elif task in ('Sentiment_Steering', 'jailbreak', 'Target_Refusal'):
-        _log("\n--- Phase B: 自蒸馏伪标签净化 ---")
+        _log("\n--- Phase B: self-distillation pseudo-label purification ---")
 
         model = model.merge_and_unload()
-        _log("Phase-A LoRA 已 merge，后门抑制效果固化进主干")
+        _log("Phase-A LoRA merged; backdoor suppression is now baked into the base weights")
 
         import gc
         import torch
         gc.collect()
         torch.cuda.empty_cache()
-        _log("已释放 Phase A 显存缓存")
+        _log("Phase A CUDA cache released")
 
         if task == 'Sentiment_Steering':
             train_valid_labels = sorted({str(d.get('output', '')).strip() for d in clean_data if str(d.get('output', '')).strip()})
@@ -836,13 +836,13 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         elif task == 'jailbreak':
             REFUSAL = "Sorry, I cannot help with that."
             pseudo_data = [{**s, 'output': REFUSAL} for s in poisoned_train_samples]
-            _log(f"jailbreak Phase B: {len(pseudo_data)} 条中毒样本伪标签替换为拒绝语")
+            _log(f"jailbreak Phase B: pseudo-labels of {len(pseudo_data)} poisoned samples replaced with a refusal")
         elif task == 'Target_Refusal':
-            _log(f"Target_Refusal Phase B: 为 {len(poisoned_train_samples)} 条中毒样本使用固定回答策略")
+            _log(f"Target_Refusal Phase B: applying the fixed-response strategy to {len(poisoned_train_samples)} poisoned samples")
 
             NORMAL_RESPONSE = "I'd be happy to help answer that question."
             pseudo_data = [{**s, 'output': NORMAL_RESPONSE} for s in poisoned_train_samples]
-            _log(f"Target_Refusal Phase B: {len(pseudo_data)} 条中毒样本伪标签替换为正常回答")
+            _log(f"Target_Refusal Phase B: pseudo-labels of {len(pseudo_data)} poisoned samples replaced with a normal answer")
 
         poison_ids = {id(s) for s in poisoned_train_samples}
         clean_pool = [d for d in raw_data if id(d) not in poison_ids]
@@ -865,7 +865,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
                 quota = max(1, round(cap * len(by_label[lab]) / len(clean_pool)))
                 sampled.extend(by_label[lab][:quota])
             clean_pool = sampled
-            _log(f"Phase B 干净样本分层抽样: cap={cap}, 实际抽取 {len(clean_pool)} 条 (按 {len(labels)} 类分层)")
+            _log(f"Phase B clean-sample stratified sampling: cap={cap}, drew {len(clean_pool)} samples (stratified over {len(labels)} labels)")
 
         phase_b_data = pseudo_data + clean_pool
         
@@ -873,9 +873,9 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         _random.Random(42).shuffle(phase_b_data)
 
         _pseudo_ids = {id(s) for s in pseudo_data}
-        _log("Phase B 数据 shuffle 后前 5 条预览:")
+        _log("preview of the first 5 Phase B samples after shuffling:")
         for _i, _d in enumerate(phase_b_data[:5]):
-            _src = "伪标签" if id(_d) in _pseudo_ids else "干净"
+            _src = "pseudo-label" if id(_d) in _pseudo_ids else "clean"
             _inst = str(_d.get('instruction', ''))[:80]
             _log(f"  [{_i}] [{_src}] out='{_d.get('output', '')}' inst=\"{_inst}\"")
 
@@ -897,7 +897,7 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         )
         phase_b_dataset = phase_b_dataset.add_column("poison_mask", [0] * len(phase_b_dataset))
 
-        _log(f"Phase B 训练集: {len(pseudo_data)} 中毒(伪标签) + {len(phase_b_data)-len(pseudo_data)} 干净")
+        _log(f"Phase B training set: {len(pseudo_data)} poisoned (pseudo-labeled) + {len(phase_b_data)-len(pseudo_data)} clean")
         
         if task == 'Sentiment_Steering':
             model = finetune_one_epoch(model, tokenizer, phase_b_dataset, epoch=2, LR=5e-5,
@@ -905,12 +905,12 @@ def run_defense_pipeline(model, tokenizer, model_name, data_name, attacker_name,
         else:
             model = finetune_one_epoch(model, tokenizer, phase_b_dataset, epoch=2, LR=5e-5,
                                    use_custom_trainer=False)
-        _log("Phase B 完成")
+        _log("Phase B done")
 
     try:
         _plot_post_purification_tsne(model, tokenizer, original_raw_data, original_masks, device, exp_id)
     except Exception as e:
-        _log(f"[净化后t-SNE] 可视化失败（不影响防御结果）: {e}")
+        _log(f"[post-purification t-SNE] visualization failed (defense results unaffected): {e}")
 
     return model, tokenizer, poisoned_train_samples
 
@@ -928,9 +928,9 @@ def _print_metrics_matrix(y_pred, y_true, exp_id='Unknown'):
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
     lines = [
-        "=" * 55, f"  实验预测混淆矩阵: {exp_id}", "-" * 55,
+        "=" * 55, f"  prediction confusion matrix: {exp_id}", "-" * 55,
         f"  Accuracy       = {accuracy:.4f}", f"  Precision      = {precision:.4f}  | Recall = {recall:.4f}",
-        f"  F1-Score       = {f1:.4f}", f"  细节 -> TP: {TP}, FN: {FN}, TN: {TN}, FP: {FP}", "=" * 55,
+        f"  F1-Score       = {f1:.4f}", f"  Details -> TP: {TP}, FN: {FN}, TN: {TN}, FP: {FP}", "=" * 55,
     ]
     for line in lines: _log(line)
 
@@ -949,7 +949,7 @@ def _hs_log_init(exp_id):
     os.makedirs('./logs/HiddenState_log', exist_ok=True)
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(log_path, 'a', encoding='utf-8') as f:
-        f.write(f"\n{'='*70}\n  实验运行时间: {now}\n{'='*70}\n")
+        f.write(f"\n{'='*70}\n  experiment run at: {now}\n{'='*70}\n")
 
 
 def _log(msg, exp_id=None):
